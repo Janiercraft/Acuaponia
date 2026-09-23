@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Sistema Acuapónico</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ ENCABEZADO ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="30" height="30">
+          <path d="M20 4 C11 12 6 19 6 25 a14 14 0 0 0 28 0 C34 19 29 12 20 4 Z" fill="var(--water)" opacity="0.9"/>
+          <path d="M20 12 C15 17 12 21 12 25 a8 8 0 0 0 16 0 C28 21 25 17 20 12 Z" fill="var(--water-light)"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <h1>Simulador de Sistema Acuapónico</h1>
+        <p>Maqueta digital del recorrido peces → filtro → biofiltro → plantas / fotobiorreactor → bomba</p>
+      </div>
+    </div>
+
+    <nav class="view-tabs" role="tablist" aria-label="Vistas de la simulación">
+      <button class="tab-btn active" id="tabSimulacion" role="tab" aria-selected="true" data-view="simulation">Simulación</button>
+      <button class="tab-btn" id="tabMonitoreo" role="tab" aria-selected="false" data-view="monitoring">Monitoreo</button>
+    </nav>
+  </header>
+
+  <!-- ============ BARRA DE CONTROLES ============ -->
+  <div class="control-bar">
+    <div class="control-group">
+      <button id="btnPlayPause" class="ctrl-btn primary" title="Iniciar o pausar la simulación">
+        <span id="playIcon">▶</span> <span id="playLabel">Iniciar</span>
+      </button>
+      <button id="btnReset" class="ctrl-btn" title="Reiniciar la simulación">↻ Reiniciar</button>
+    </div>
+
+    <div class="control-group speed-group">
+      <label for="speedRange">⚡ Velocidad</label>
+      <input type="range" id="speedRange" min="0.5" max="10" step="0.5" value="1">
+      <span id="speedValue" class="speed-value">1.0×</span>
+      <span class="speed-presets">
+        <button type="button" class="speed-preset-btn" data-speed="1">1×</button>
+        <button type="button" class="speed-preset-btn" data-speed="2">2×</button>
+        <button type="button" class="speed-preset-btn" data-speed="5">5×</button>
+        <button type="button" class="speed-preset-btn" data-speed="10">10×</button>
+      </span>
+    </div>
+
+    <div class="control-group">
+      <button id="btnPump" class="ctrl-btn pump-toggle on" title="Encender o apagar la bomba principal">
+        💧 Bomba <span id="pumpState">ON</span>
+      </button>
+    </div>
+
+    <div class="control-group">
+      <button id="btnPbrLight" class="ctrl-btn pbr-toggle on" title="Encender o apagar la iluminación del fotobiorreactor">
+        ☀️ Luz PBR <span id="pbrLightState">ON</span>
+      </button>
+      <button id="btnPbrActive" class="ctrl-btn pbr-toggle on" title="Activar o pausar sólo la rama del fotobiorreactor">
+        <span id="pbrActiveState">ACTIVO</span>
+      </button>
+    </div>
+
+    <div class="control-group flow-split-group">
+      <label for="flowSplitRange">🔀 Caudal</label>
+      <input type="range" id="flowSplitRange" min="0" max="100" step="5" value="60">
+      <span id="flowSplitLabel" class="flow-split-value">Plantas 60% · PBR 40%</span>
+    </div>
+
+    <div class="control-group">
+      <button id="btnFaultPanel" class="ctrl-btn warn-btn" aria-expanded="false" aria-controls="faultPanel">
+        ⚠ Simular fallas
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ PANEL DE FALLAS (desplegable) ============ -->
+  <div id="faultPanel" class="fault-panel hidden">
+    <p class="fault-panel-title">Provocar una condición anómala para observar su efecto en el sistema:</p>
+    <div class="fault-chips">
+      <button class="fault-chip" data-fault="pumpOff">Bomba apagada</button>
+      <button class="fault-chip" data-fault="filterClogged">Filtro obstruido</button>
+      <button class="fault-chip" data-fault="lowWater">Nivel de agua bajo</button>
+      <button class="fault-chip" data-fault="highPh">pH elevado</button>
+      <button class="fault-chip" data-fault="highAmmonia">Amoníaco elevado</button>
+      <button class="fault-chip" data-fault="lowOxygen">Baja oxigenación</button>
+    </div>
+  </div>
+
+  <!-- ============ TIRA DE ALERTAS ============ -->
+  <div id="alertsStrip" class="alerts-strip" aria-live="polite"></div>
+
+  <!-- ============ CONTENIDO PRINCIPAL ============ -->
+  <main>
+
+    <!-- ---------- VISTA 1: SIMULACIÓN ---------- -->
+    <section id="view-simulation" class="view active">
+
+      <div class="svg-wrap">
+        <svg id="systemSvg" viewBox="0 0 1440 660" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Diagrama animado del sistema acuapónico">
+
+          <!-- ===== DEFINICIONES ===== -->
+          <defs>
+            <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--water-light)"/>
+              <stop offset="100%" stop-color="var(--water)"/>
+            </linearGradient>
+            <pattern id="metalMesh" width="14" height="14" patternUnits="userSpaceOnUse">
+              <path d="M0 0 L14 14 M14 0 L0 14" stroke="var(--metal)" stroke-width="1" opacity="0.35"/>
+            </pattern>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <!-- ===== TUBERÍAS (dibujadas primero, quedan "detrás" de los tanques) ===== -->
+          <g id="pipesLayer" stroke-linecap="round" fill="none">
+
+            <!-- Tubería de retorno (bomba -> tanque de peces), decorativa -->
+            <path id="pipeReturn" class="pipe pipe-return"
+                  d="M1310,260 L1310,330 L1310,600 L150,600 L150,360"/>
+
+            <!-- Ramales estáticos hacia los tubos de plantas 1 y 3 (el tubo 2 va sobre la tubería principal) -->
+            <path id="pipeBranchTop" class="pipe pipe-branch" d="M760,180 L820,180"/>
+            <path id="pipeBranchBottom" class="pipe pipe-branch" d="M760,340 L820,340"/>
+            <path id="pipeManifold" class="pipe pipe-branch" d="M760,180 L760,340"/>
+
+            <path id="pipeCollectTop" class="pipe pipe-branch" d="M1160,180 L1200,180"/>
+            <path id="pipeCollectBottom" class="pipe pipe-branch" d="M1160,340 L1200,340"/>
+            <path id="pipeCollector" class="pipe pipe-branch" d="M1200,180 L1200,340"/>
+
+            <!-- Rama del fotobiorreactor: se desprende en el mismo punto de
+                 bifurcación (760,260) que alimenta a las plantas, baja hasta
+                 el fotobiorreactor, lo atraviesa y vuelve a subir hasta el
+                 mismo punto de convergencia (1200,260) antes de la bomba.
+                 Es UNA sola tubería (igual que pipeMain/pipeReturn), así que
+                 waterFlow.js la detecta automáticamente por su clase .pipe
+                 y nutrients.js la usa como camino de partículas. -->
+            <path id="pipePBR" class="pipe pipe-branch"
+                  d="M760,260 L760,462 L820,462 L1160,462 L1200,462 L1200,260"/>
+
+            <!-- Tubería principal: peces -> filtro -> biofiltro -> tubo central -> bomba -->
+            <path id="pipeMain" class="pipe pipe-main"
+                  d="M260,260 L340,260 L490,260 L570,260 L720,260 L760,260 L820,260 L1160,260 L1200,260 L1250,260 L1310,260"/>
+
+            <!-- Nodos de unión (decorativos) -->
+            <circle class="pipe-node" cx="760" cy="260" r="4"/>
+            <circle class="pipe-node" cx="1200" cy="260" r="4"/>
+          </g>
+
+          <!-- ===== TANQUE DE PECES ===== -->
+          <g id="fishTank" class="component">
+            <text class="comp-label" x="150" y="145">TANQUE DE PECES</text>
+            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-body" filter="url(#softShadow)"/>
+            <rect id="fishWaterRect" x="52" y="200" width="196" height="148" rx="8" class="tank-water"/>
+            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-frame" fill="url(#metalMesh)"/>
+            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-outline"/>
+
+            <!-- peces -->
+            <g id="fishGroup" clip-path="none">
+              <g class="fish fish-1"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
+              <g class="fish fish-2"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
+              <g class="fish fish-3"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
+            </g>
+
+            <text class="comp-sub" x="150" y="378">🐟 peces · desechos</text>
+          </g>
+
+          <!-- ===== FILTRO MECÁNICO ===== -->
+          <g id="filterUnit" class="component">
+            <text class="comp-label" x="415" y="178">FILTRO MECÁNICO</text>
+            <rect x="340" y="190" width="150" height="140" rx="10" class="vessel-body" filter="url(#softShadow)"/>
+            <rect id="filterLoadRect" x="346" y="316" width="138" height="0" class="filter-load"/>
+            <rect x="340" y="190" width="150" height="140" rx="10" class="vessel-outline"/>
+            <g id="filterMesh" class="filter-mesh">
+              <line x1="352" y1="215" x2="478" y2="215"/>
+              <line x1="352" y1="235" x2="478" y2="235"/>
+              <line x1="352" y1="255" x2="478" y2="255"/>
+              <line x1="352" y1="275" x2="478" y2="275"/>
+            </g>
+            <text class="comp-sub" x="415" y="346">retiene sólidos</text>
+            <text id="filterStatusTxt" class="comp-status" x="415" y="360">OK</text>
+          </g>
+
+          <!-- ===== BIOFILTRO ===== -->
+          <g id="bioUnit" class="component">
+            <text class="comp-label" x="645" y="178">BIOFILTRO</text>
+            <rect x="570" y="190" width="150" height="140" rx="10" class="vessel-body-bio" filter="url(#softShadow)"/>
+            <rect x="570" y="190" width="150" height="140" rx="10" class="vessel-outline"/>
+            <g id="bacteriaGroup" class="bacteria-group">
+              <circle class="bacterium b1" cx="600" cy="230" r="5"/>
+              <circle class="bacterium b2" cx="630" cy="250" r="4"/>
+              <circle class="bacterium b3" cx="660" cy="225" r="5"/>
+              <circle class="bacterium b4" cx="690" cy="245" r="4"/>
+              <circle class="bacterium b5" cx="615" cy="275" r="4.5"/>
+              <circle class="bacterium b6" cx="655" cy="290" r="5"/>
+              <circle class="bacterium b7" cx="685" cy="270" r="4"/>
+            </g>
+            <text class="comp-sub" x="645" y="346">NH₃ → NO₂⁻ → NO₃⁻</text>
+            <text id="bioStatusTxt" class="comp-status" x="645" y="360">OK</text>
+          </g>
+
+          <!-- ===== TUBOS CON PLANTAS ===== -->
+          <g id="plantBed" class="component">
+            <text class="comp-label" x="990" y="108">TUBOS CON PLANTAS</text>
+            <rect x="800" y="150" width="380" height="230" rx="12" class="bed-frame" fill="none"/>
+
+            <!-- fila 1 -->
+            <g class="grow-tube" data-row="0">
+              <rect x="820" y="165" width="340" height="30" rx="15" class="tube-body"/>
+              <g class="holes-row" data-y="180"></g>
+            </g>
+            <!-- fila 2 -->
+            <g class="grow-tube" data-row="1">
+              <rect x="820" y="245" width="340" height="30" rx="15" class="tube-body"/>
+              <g class="holes-row" data-y="260"></g>
+            </g>
+            <!-- fila 3 -->
+            <g class="grow-tube" data-row="2">
+              <rect x="820" y="325" width="340" height="30" rx="15" class="tube-body"/>
+              <g class="holes-row" data-y="340"></g>
+            </g>
+
+            <text class="comp-sub" x="990" y="400">🌱 hortalizas · absorción de nutrientes</text>
+          </g>
+
+          <!-- ===== FOTOBIORREACTOR ===== -->
+          <g id="pbrUnit" class="component">
+            <text class="comp-label" x="990" y="422">FOTOBIORREACTOR</text>
+
+            <!-- cuerpo transparente del reactor -->
+            <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-vessel" filter="url(#softShadow)"/>
+
+            <!-- tinte verde del agua: se intensifica con la biomasa, sin tapar
+                 nunca del todo las paredes/burbujas/iluminación (ver sección 11) -->
+            <rect id="pbrWaterTint" x="822" y="434" width="336" height="56" rx="10" class="pbr-water-tint"/>
+
+            <!-- iluminación (se atenúa cuando la luz está apagada) -->
+            <rect id="pbrLightGlow" x="820" y="432" width="340" height="60" rx="12" class="pbr-light-glow on"/>
+
+            <!-- nivel de biomasa/microalgas, crece igual que la carga del filtro -->
+            <rect id="pbrBiomassRect" x="826" y="486" width="328" height="0" rx="4" class="pbr-biomass-fill"/>
+
+            <!-- microalgas: este grupo empieza vacío a propósito. Las colonias
+                 y filamentos se generan una sola vez en JS (ver
+                 modules/photobioreactor.js → buildAlgaeField) y luego sólo se
+                 revelan/mueven, nunca se crean ni se destruyen elemento a
+                 elemento en cada fotograma — así se evita cualquier fuga de
+                 memoria por acumulación de nodos SVG. -->
+            <g id="pbrAlgaeGroup" class="algae-group"></g>
+
+            <!-- burbujas de aireación, suben desde el fondo -->
+            <g id="pbrBubbleGroup" class="bubble-group">
+              <circle class="bubble bub1" cx="850" cy="485" r="2.4"/>
+              <circle class="bubble bub2" cx="895" cy="485" r="2"/>
+              <circle class="bubble bub3" cx="955" cy="485" r="2.6"/>
+              <circle class="bubble bub4" cx="1015" cy="485" r="2"/>
+              <circle class="bubble bub5" cx="1075" cy="485" r="2.4"/>
+              <circle class="bubble bub6" cx="1125" cy="485" r="2"/>
+            </g>
+
+            <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-outline"/>
+
+            <text id="pbrGrowthLabel" class="comp-sub" x="990" y="509">🟢 biomasa 5% · iniciando</text>
+            <text id="pbrStatusTxt" class="comp-status" x="990" y="523">OK</text>
+          </g>
+
+          <!-- ===== BOMBA / DEPÓSITO ===== -->
+          <g id="pumpUnit" class="component">
+            <text class="comp-label" x="1310" y="178">BOMBA / DEPÓSITO</text>
+            <rect x="1250" y="190" width="120" height="140" rx="16" class="barrel-body" filter="url(#softShadow)"/>
+            <rect x="1250" y="190" width="120" height="140" rx="16" class="barrel-outline"/>
+            <rect x="1262" y="178" width="96" height="18" rx="6" class="barrel-lid"/>
+            <g id="pumpRotor" class="pump-rotor" transform="translate(1310,300)">
+              <circle r="14" class="rotor-hub"/>
+              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(0)"/>
+              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(90)"/>
+              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(180)"/>
+              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(270)"/>
+            </g>
+            <circle id="pumpIndicator" cx="1360" cy="200" r="6" class="indicator-dot on"/>
+            <text class="comp-sub" x="1310" y="346">circulación</text>
+          </g>
+
+          <!-- ===== CAPA DE PARTÍCULAS (agua/nutrientes/residuos) ===== -->
+          <g id="particlesLayer"></g>
+
+        </svg>
+
+        <!-- panel flotante de lectura rápida sobre el lienzo -->
+        <div class="quick-status" aria-hidden="false">
+          <div class="qs-item"><span class="qs-label">Temp.</span><span class="qs-value" id="qsTemp">24.5 °C</span></div>
+          <div class="qs-item"><span class="qs-label">pH</span><span class="qs-value" id="qsPh">6.8</span></div>
+          <div class="qs-item"><span class="qs-label">O₂</span><span class="qs-value" id="qsO2">7.2 mg/L</span></div>
+          <div class="qs-item"><span class="qs-label">NO₃⁻</span><span class="qs-value" id="qsNitrate">30 ppm</span></div>
+        </div>
+      </div>
+
+      <p class="sim-note">Los valores mostrados son <strong>simulados</strong>, no corresponden a mediciones reales de sensores.</p>
+    </section>
+
+    <!-- ---------- VISTA 2: MONITOREO ---------- -->
+    <section id="view-monitoring" class="view">
+
+      <div class="param-grid" id="paramGrid">
+        <!-- Las tarjetas de parámetros se generan dinámicamente en monitoring.js -->
+      </div>
+
+      <div class="monitor-lower">
+        <div class="status-panel">
+          <h2>Estado de componentes</h2>
+          <ul class="status-list" id="statusList"></ul>
+        </div>
+
+        <div class="alert-log-panel">
+          <h2>Registro de alertas</h2>
+          <ul class="alert-log" id="alertLog">
+            <li class="alert-log-empty">Sin alertas registradas todavía.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="status-panel pbr-monitor-panel">
+        <h2>Fotobiorreactor</h2>
+        <ul class="status-list" id="pbrStatusList"></ul>
+      </div>
+
+      <div class="manual-entry-panel">
+        <h2>Registro manual de pruebas de agua</h2>
+        <p class="manual-entry-hint">
+          Mientras no tengas sensores electrónicos de amoníaco, nitrito o nitrato
+          conectados, puedes registrar aquí los resultados de un kit de prueba
+          manual (por ejemplo API Freshwater Master Test Kit) y el panel los
+          usará en lugar de los valores simulados.
+        </p>
+        <form id="manualEntryForm" class="manual-entry-form">
+          <label>Amoníaco (ppm)<input type="number" step="0.01" min="0" id="manualAmmonia" placeholder="0.10"></label>
+          <label>Nitrito (ppm)<input type="number" step="0.01" min="0" id="manualNitrite" placeholder="0.05"></label>
+          <label>Nitrato (ppm)<input type="number" step="1" min="0" id="manualNitrate" placeholder="30"></label>
+          <label>pH<input type="number" step="0.01" min="0" max="14" id="manualPh" placeholder="6.80"></label>
+          <button type="submit" class="ctrl-btn primary">Registrar lectura</button>
+          <span id="manualEntryConfirm" class="manual-entry-confirm" aria-live="polite"></span>
+        </form>
+      </div>
+
+      <p class="sim-note">Panel de monitoreo con datos simulados. La estructura <code>Aqua.state.sensors</code> está lista para recibir lecturas reales vía MQTT desde un ESP32.</p>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <span>Simulador educativo — arquitectura preparada para integración futura con ESP32 + MQTT.</span>
+  </footer>
+</div>
+
+<!-- ============ SCRIPTS (orden importa: módulos primero, app.js al final) ============ -->
+<script src="modules/waterFlow.js"></script>
+<script src="modules/nutrients.js"></script>
+<script src="modules/fish.js"></script>
+<script src="modules/plants.js"></script>
+<script src="modules/photobioreactor.js"></script>
+<script src="modules/monitoring.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
