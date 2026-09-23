@@ -130,3 +130,7 @@ azul.
   historial entre sesiones.
 - Sustituir los peces/plantas ilustrados por sprites más detallados si
   se desea mayor fidelidad visual.
+
+## Diseño responsive
+
+La interfaz fue adaptada para escritorio, portátil, tablet y móvil. Los controles y paneles cambian de distribución según el ancho disponible, los formularios se apilan en pantallas pequeñas y el diagrama principal conserva un tamaño mínimo legible con desplazamiento horizontal contenido dentro del área de simulación, evitando overflow horizontal de toda la página.

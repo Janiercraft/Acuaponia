@@ -771,3 +771,462 @@ main { margin-top: 18px; }
     animation: none !important;
   }
 }
+
+/* =========================================================================
+   RESPONSIVE COMPLETO — móvil, tablet, portátil y pantallas grandes
+   Mantiene el diagrama legible sin provocar overflow horizontal de la página.
+   ========================================================================= */
+
+html {
+  overflow-x: hidden;
+}
+
+body,
+.app,
+main,
+.view,
+.topbar,
+.control-bar,
+.fault-panel,
+.svg-wrap,
+.param-grid,
+.monitor-lower,
+.manual-entry-panel {
+  min-width: 0;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+button,
+input {
+  max-width: 100%;
+}
+
+/* Pantallas grandes: aprovecha mejor el espacio sin estirar demasiado */
+@media (min-width: 1401px) {
+  .app {
+    max-width: 1520px;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+/* Portátiles y tablets horizontales */
+@media (max-width: 1100px) {
+  .app {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .brand {
+    flex: 1 1 520px;
+    min-width: 0;
+  }
+
+  .brand-text {
+    min-width: 0;
+  }
+
+  .brand-text p {
+    line-height: 1.45;
+  }
+
+  .control-bar {
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .control-group {
+    flex: 1 1 230px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    flex: 1 1 320px;
+  }
+
+  .speed-group input[type="range"],
+  .flow-split-group input[type="range"] {
+    flex: 1 1 140px;
+    min-width: 110px;
+    width: auto;
+  }
+
+  .flow-split-value {
+    min-width: 0;
+    flex: 1 1 150px;
+  }
+
+  .quick-status {
+    gap: 10px;
+    padding: 7px 10px;
+  }
+}
+
+/* Tablets y ventanas angostas */
+@media (max-width: 900px) {
+  .app {
+    padding-top: 16px;
+  }
+
+  .topbar {
+    gap: 14px;
+  }
+
+  .view-tabs {
+    margin-left: auto;
+  }
+
+  .control-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .control-group {
+    width: 100%;
+  }
+
+  .control-group > .ctrl-btn {
+    flex: 1 1 auto;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    grid-column: 1 / -1;
+  }
+
+  .fault-panel {
+    padding: 14px;
+  }
+
+  .fault-chip {
+    flex: 1 1 180px;
+    text-align: center;
+  }
+
+  .svg-wrap {
+    padding: 8px;
+  }
+
+  .param-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .manual-entry-form label {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 180px;
+  }
+
+  .manual-entry-form input {
+    width: 100%;
+  }
+
+  .manual-entry-form .ctrl-btn {
+    flex: 1 1 180px;
+    min-height: 42px;
+  }
+}
+
+/* Móviles grandes / vertical tablet */
+@media (max-width: 640px) {
+  .app {
+    width: 100%;
+    padding: 12px 10px 26px;
+  }
+
+  .topbar {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  .brand {
+    width: 100%;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+
+  .brand-text h1 {
+    font-size: clamp(1rem, 5vw, 1.15rem);
+    line-height: 1.25;
+  }
+
+  .brand-text p {
+    margin-top: 4px;
+    font-size: 0.74rem;
+  }
+
+  .view-tabs {
+    width: 100%;
+    margin: 0;
+  }
+
+  .tab-btn {
+    min-width: 0;
+    padding: 9px 10px;
+  }
+
+  .control-bar {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .control-group,
+  .speed-group,
+  .flow-split-group {
+    grid-column: auto;
+    flex: 1 1 auto;
+    justify-content: stretch;
+  }
+
+  .control-group {
+    gap: 8px;
+  }
+
+  .control-group > .ctrl-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .speed-group label,
+  .flow-split-group label {
+    flex: 0 0 100%;
+  }
+
+  .speed-group input[type="range"],
+  .flow-split-group input[type="range"] {
+    flex: 1 1 150px;
+    width: 100%;
+  }
+
+  .speed-value {
+    flex: 0 0 auto;
+  }
+
+  .speed-presets {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin-left: 0;
+  }
+
+  .speed-preset-btn {
+    min-height: 34px;
+  }
+
+  .flow-split-value {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .fault-panel-title {
+    line-height: 1.45;
+  }
+
+  .fault-chips {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fault-chip {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 7px;
+    border-radius: 10px;
+    line-height: 1.25;
+  }
+
+  .alert-banner {
+    align-items: flex-start;
+    line-height: 1.35;
+  }
+
+  /* El lienzo conserva un tamaño mínimo útil y sólo él puede desplazarse. */
+  .svg-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  #systemSvg {
+    width: 760px;
+    min-width: 760px;
+    max-width: none;
+  }
+
+  .quick-status {
+    position: sticky;
+    left: 0;
+    top: auto;
+    width: max-content;
+    max-width: calc(100vw - 38px);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(62px, 1fr));
+    gap: 8px;
+    margin: 0 0 8px;
+    overflow-x: auto;
+    z-index: 4;
+  }
+
+  .qs-item {
+    min-width: 62px;
+  }
+
+  .sim-note {
+    line-height: 1.45;
+  }
+
+  .param-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .param-card {
+    padding: 12px;
+  }
+
+  .param-value {
+    font-size: clamp(1.25rem, 7vw, 1.55rem);
+    overflow-wrap: anywhere;
+  }
+
+  .monitor-lower {
+    gap: 10px;
+  }
+
+  .status-panel,
+  .alert-log-panel,
+  .manual-entry-panel {
+    padding: 14px;
+  }
+
+  .status-list li,
+  .alert-log li {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    line-height: 1.35;
+  }
+
+  .alert-log-time {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .manual-entry-hint {
+    line-height: 1.5;
+  }
+
+  .manual-entry-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .manual-entry-form label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .manual-entry-form .ctrl-btn,
+  .manual-entry-confirm {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .app-footer {
+    line-height: 1.45;
+  }
+}
+
+/* Móviles pequeños (320–420 px) */
+@media (max-width: 420px) {
+  .brand-text p {
+    display: none;
+  }
+
+  .control-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .control-group > .ctrl-btn {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .speed-group label,
+  .flow-split-group label,
+  .speed-presets,
+  .flow-split-value {
+    flex-basis: 100%;
+  }
+
+  .fault-chips {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-status {
+    grid-template-columns: repeat(2, minmax(92px, 1fr));
+    width: 100%;
+  }
+
+  .param-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-entry-form {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-entry-form .ctrl-btn,
+  .manual-entry-confirm {
+    grid-column: auto;
+  }
+}
+
+/* Mejora de usabilidad táctil sin afectar escritorio */
+@media (hover: none) and (pointer: coarse) {
+  .tab-btn,
+  .ctrl-btn,
+  .fault-chip,
+  .speed-preset-btn {
+    min-height: 42px;
+  }
+
+  input[type="range"] {
+    min-height: 34px;
+  }
+
+  .ctrl-btn:hover,
+  .fault-chip:hover,
+  .speed-preset-btn:hover {
+    transform: none;
+  }
+}
