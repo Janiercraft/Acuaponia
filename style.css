@@ -1232,4 +1232,407 @@ input {
     transform: none;
   }
 }
-\n\n/* =========================================================================\n   RESPONSIVE V2 — optimizado para navegadores móviles, WebView y ventanas\n   estrechas. Evita el lienzo fijo de 760 px y elimina desbordamientos.\n   ========================================================================= */\n\nbody {\n  width: 100%;\n  min-height: 100dvh;\n}\n\n.app {\n  width: min(100%, 1520px);\n}\n\n@media (max-width: 768px) {\n  .app {\n    padding: 10px 8px 24px;\n  }\n\n  .topbar {\n    width: 100%;\n    gap: 10px;\n  }\n\n  .brand {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .view-tabs {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    width: 100%;\n    padding: 4px;\n  }\n\n  .tab-btn {\n    width: 100%;\n    min-height: 44px;\n    padding: 10px 8px;\n  }\n\n  .control-bar {\n    display: flex;\n    flex-direction: column;\n    width: 100%;\n    padding: 10px;\n    gap: 8px;\n  }\n\n  .control-group,\n  .speed-group,\n  .flow-split-group {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n    gap: 8px;\n    padding: 8px;\n    background: rgba(255,255,255,0.015);\n    border-radius: 10px;\n  }\n\n  .control-group:has(> .ctrl-btn + .ctrl-btn) {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .control-group > .ctrl-btn {\n    width: 100%;\n    min-width: 0;\n    min-height: 44px;\n    white-space: normal;\n  }\n\n  .speed-group,\n  .flow-split-group {\n    grid-template-columns: minmax(0, 1fr) auto;\n    align-items: center;\n  }\n\n  .speed-group label,\n  .flow-split-group label {\n    grid-column: 1 / -1;\n  }\n\n  .speed-group input[type="range"],\n  .flow-split-group input[type="range"] {\n    width: 100%;\n    min-width: 0;\n  }\n\n  .speed-presets,\n  .flow-split-value {\n    grid-column: 1 / -1;\n    width: 100%;\n    margin: 0;\n  }\n\n  .speed-presets {\n    display: grid;\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }\n\n  .svg-wrap {\n    width: 100%;\n    padding: 6px;\n    overflow: hidden;\n  }\n\n  #systemSvg {\n    width: 100%;\n    min-width: 0;\n    max-width: 100%;\n    height: auto;\n    aspect-ratio: 1440 / 660;\n  }\n\n  .quick-status {\n    position: static;\n    width: 100%;\n    max-width: none;\n    margin: 8px 0 0;\n    display: grid;\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n    overflow: visible;\n    padding: 8px;\n    gap: 6px;\n  }\n\n  .qs-item {\n    min-width: 0;\n    align-items: center;\n    text-align: center;\n  }\n\n  .qs-label { font-size: 0.58rem; }\n  .qs-value { font-size: clamp(0.68rem, 2.6vw, 0.82rem); }\n\n  .fault-chips {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .param-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n}\n\n@media (max-width: 480px) {\n  .app { padding-inline: 6px; }\n\n  .brand-mark {\n    width: 36px;\n    height: 36px;\n    flex-basis: 36px;\n  }\n\n  .brand-text h1 {\n    font-size: 0.98rem;\n  }\n\n  .view-tabs { border-radius: 14px; }\n  .tab-btn { border-radius: 10px; }\n\n  .control-group:has(> .ctrl-btn + .ctrl-btn) {\n    grid-template-columns: 1fr;\n  }\n\n  .speed-group,\n  .flow-split-group {\n    grid-template-columns: 1fr;\n  }\n\n  .speed-value {\n    justify-self: end;\n    margin-top: -34px;\n  }\n\n  .quick-status {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .fault-chips,\n  .param-grid,\n  .manual-entry-form {\n    grid-template-columns: 1fr;\n  }\n\n  .param-card,\n  .status-panel,\n  .alert-log-panel,\n  .manual-entry-panel {\n    border-radius: 12px;\n  }\n}\n\n/* Fallback para navegadores antiguos que no soporten :has(). */\n@supports not selector(:has(*)) {\n  @media (max-width: 768px) {\n    .control-group { display: flex; flex-wrap: wrap; }\n    .control-group > .ctrl-btn { flex: 1 1 160px; }\n    .speed-group, .flow-split-group { display: flex; }\n  }\n}\n
+
+
+/* =========================================================================
+   RESPONSIVE V2 — optimizado para navegadores móviles, WebView y ventanas
+   estrechas. Evita el lienzo fijo de 760 px y elimina desbordamientos.
+   ========================================================================= */
+
+body {
+  width: 100%;
+  min-height: 100dvh;
+}
+
+.app {
+  width: min(100%, 1520px);
+}
+
+@media (max-width: 768px) {
+  .app {
+    padding: 10px 8px 24px;
+  }
+
+  .topbar {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .brand {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .view-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    padding: 4px;
+  }
+
+  .tab-btn {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 8px;
+  }
+
+  .control-bar {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .control-group,
+  .speed-group,
+  .flow-split-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.015);
+    border-radius: 10px;
+  }
+
+  .control-group:has(> .ctrl-btn + .ctrl-btn) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .control-group > .ctrl-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .speed-group label,
+  .flow-split-group label {
+    grid-column: 1 / -1;
+  }
+
+  .speed-group input[type="range"],
+  .flow-split-group input[type="range"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .speed-presets,
+  .flow-split-value {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+  }
+
+  .speed-presets {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .svg-wrap {
+    width: 100%;
+    padding: 6px;
+    overflow: hidden;
+  }
+
+  #systemSvg {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 1440 / 660;
+  }
+
+  .quick-status {
+    position: static;
+    width: 100%;
+    max-width: none;
+    margin: 8px 0 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .qs-item {
+    min-width: 0;
+    align-items: center;
+    text-align: center;
+  }
+
+  .qs-label { font-size: 0.58rem; }
+  .qs-value { font-size: clamp(0.68rem, 2.6vw, 0.82rem); }
+
+  .fault-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .param-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .app { padding-inline: 6px; }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .brand-text h1 {
+    font-size: 0.98rem;
+  }
+
+  .view-tabs { border-radius: 14px; }
+  .tab-btn { border-radius: 10px; }
+
+  .control-group:has(> .ctrl-btn + .ctrl-btn) {
+    grid-template-columns: 1fr;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    grid-template-columns: 1fr;
+  }
+
+  .speed-value {
+    justify-self: end;
+    margin-top: -34px;
+  }
+
+  .quick-status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fault-chips,
+  .param-grid,
+  .manual-entry-form {
+    grid-template-columns: 1fr;
+  }
+
+  .param-card,
+  .status-panel,
+  .alert-log-panel,
+  .manual-entry-panel {
+    border-radius: 12px;
+  }
+}
+
+/* Fallback para navegadores antiguos que no soporten :has(). */
+@supports not selector(:has(*)) {
+  @media (max-width: 768px) {
+    .control-group { display: flex; flex-wrap: wrap; }
+    .control-group > .ctrl-btn { flex: 1 1 160px; }
+    .speed-group, .flow-split-group { display: flex; }
+  }
+}
+
+
+/* =========================================================================
+   RESPONSIVE V3 — corrección definitiva de móvil
+   - Evita el hueco vertical del encabezado causado por flex-basis heredado.
+   - El SVG se ajusta al viewport sin forzar 760px.
+   - Controles y pestañas conservan tamaños táctiles cómodos.
+   ========================================================================= */
+@media (max-width: 768px) {
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 10px 24px;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    width: 100%;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* IMPORTANTE: neutraliza flex: 1 1 520px de la regla de tablet. */
+  .topbar > .brand,
+  .brand {
+    flex: none;
+    flex-basis: auto;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+  }
+
+  .brand {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-text {
+    min-width: 0;
+  }
+
+  .brand-text h1 {
+    margin: 0;
+    font-size: clamp(1rem, 4.6vw, 1.2rem);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .view-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    margin: 0;
+    gap: 4px;
+  }
+
+  .tab-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 8px;
+  }
+
+  main {
+    margin-top: 12px;
+  }
+
+  .control-bar {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    gap: 9px;
+  }
+
+  .control-group,
+  .speed-group,
+  .flow-split-group {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .control-group > .ctrl-btn {
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  /* El diagrama se escala al ancho real del dispositivo. */
+  .svg-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 4px;
+  }
+
+  #systemSvg {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 1440 / 660;
+  }
+
+  .quick-status {
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0 0;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 8px 8px 22px;
+  }
+
+  .topbar {
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 38px;
+    height: 38px;
+    flex-basis: auto;
+  }
+
+  .brand-text h1 {
+    font-size: clamp(.98rem, 4.7vw, 1.08rem);
+  }
+
+  .brand-text p {
+    font-size: .7rem;
+  }
+
+  .view-tabs {
+    border-radius: 16px;
+  }
+
+  .tab-btn {
+    border-radius: 12px;
+    min-height: 46px;
+    font-size: .83rem;
+  }
+
+  .control-bar {
+    border-radius: 14px;
+  }
+
+  .control-group {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .control-group > .ctrl-btn {
+    width: 100%;
+  }
+
+  .speed-group,
+  .flow-split-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .speed-value {
+    margin-top: 0;
+    justify-self: end;
+  }
+
+  .speed-presets {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .quick-status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .fault-chips,
+  .param-grid,
+  .manual-entry-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .app { padding-inline: 6px; }
+  .brand-text p { display: none; }
+  .tab-btn { padding-inline: 5px; font-size: .78rem; }
+  .speed-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
