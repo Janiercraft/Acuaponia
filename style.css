@@ -410,10 +410,10 @@ main { margin-top: 18px; }
   stroke-width: 4;
   stroke-linecap: round;
   stroke-dasharray: 2 14;
-  animation: flowDash var(--flow-duration) linear infinite;
+  /* El desplazamiento de los puntos se actualiza desde JS para máxima compatibilidad. */
 }
 
-.pipe-flow-overlay.paused { animation-play-state: paused; opacity: 0.25; }
+.pipe-flow-overlay.paused { opacity: 0.25; }
 
 @keyframes flowDash {
   to { stroke-dashoffset: -160; }
@@ -767,7 +767,9 @@ main { margin-top: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bacterium, .pipe-flow-overlay, .particle, .bubble {
+  /* Se reducen sólo animaciones decorativas. El flujo del sistema es información funcional
+     y continúa moviéndose mediante JavaScript. */
+  .bacterium, .bubble {
     animation: none !important;
   }
 }
@@ -1230,3 +1232,4 @@ input {
     transform: none;
   }
 }
+\n\n/* =========================================================================\n   RESPONSIVE V2 — optimizado para navegadores móviles, WebView y ventanas\n   estrechas. Evita el lienzo fijo de 760 px y elimina desbordamientos.\n   ========================================================================= */\n\nbody {\n  width: 100%;\n  min-height: 100dvh;\n}\n\n.app {\n  width: min(100%, 1520px);\n}\n\n@media (max-width: 768px) {\n  .app {\n    padding: 10px 8px 24px;\n  }\n\n  .topbar {\n    width: 100%;\n    gap: 10px;\n  }\n\n  .brand {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .view-tabs {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    width: 100%;\n    padding: 4px;\n  }\n\n  .tab-btn {\n    width: 100%;\n    min-height: 44px;\n    padding: 10px 8px;\n  }\n\n  .control-bar {\n    display: flex;\n    flex-direction: column;\n    width: 100%;\n    padding: 10px;\n    gap: 8px;\n  }\n\n  .control-group,\n  .speed-group,\n  .flow-split-group {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n    gap: 8px;\n    padding: 8px;\n    background: rgba(255,255,255,0.015);\n    border-radius: 10px;\n  }\n\n  .control-group:has(> .ctrl-btn + .ctrl-btn) {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .control-group > .ctrl-btn {\n    width: 100%;\n    min-width: 0;\n    min-height: 44px;\n    white-space: normal;\n  }\n\n  .speed-group,\n  .flow-split-group {\n    grid-template-columns: minmax(0, 1fr) auto;\n    align-items: center;\n  }\n\n  .speed-group label,\n  .flow-split-group label {\n    grid-column: 1 / -1;\n  }\n\n  .speed-group input[type="range"],\n  .flow-split-group input[type="range"] {\n    width: 100%;\n    min-width: 0;\n  }\n\n  .speed-presets,\n  .flow-split-value {\n    grid-column: 1 / -1;\n    width: 100%;\n    margin: 0;\n  }\n\n  .speed-presets {\n    display: grid;\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }\n\n  .svg-wrap {\n    width: 100%;\n    padding: 6px;\n    overflow: hidden;\n  }\n\n  #systemSvg {\n    width: 100%;\n    min-width: 0;\n    max-width: 100%;\n    height: auto;\n    aspect-ratio: 1440 / 660;\n  }\n\n  .quick-status {\n    position: static;\n    width: 100%;\n    max-width: none;\n    margin: 8px 0 0;\n    display: grid;\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n    overflow: visible;\n    padding: 8px;\n    gap: 6px;\n  }\n\n  .qs-item {\n    min-width: 0;\n    align-items: center;\n    text-align: center;\n  }\n\n  .qs-label { font-size: 0.58rem; }\n  .qs-value { font-size: clamp(0.68rem, 2.6vw, 0.82rem); }\n\n  .fault-chips {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .param-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n}\n\n@media (max-width: 480px) {\n  .app { padding-inline: 6px; }\n\n  .brand-mark {\n    width: 36px;\n    height: 36px;\n    flex-basis: 36px;\n  }\n\n  .brand-text h1 {\n    font-size: 0.98rem;\n  }\n\n  .view-tabs { border-radius: 14px; }\n  .tab-btn { border-radius: 10px; }\n\n  .control-group:has(> .ctrl-btn + .ctrl-btn) {\n    grid-template-columns: 1fr;\n  }\n\n  .speed-group,\n  .flow-split-group {\n    grid-template-columns: 1fr;\n  }\n\n  .speed-value {\n    justify-self: end;\n    margin-top: -34px;\n  }\n\n  .quick-status {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .fault-chips,\n  .param-grid,\n  .manual-entry-form {\n    grid-template-columns: 1fr;\n  }\n\n  .param-card,\n  .status-panel,\n  .alert-log-panel,\n  .manual-entry-panel {\n    border-radius: 12px;\n  }\n}\n\n/* Fallback para navegadores antiguos que no soporten :has(). */\n@supports not selector(:has(*)) {\n  @media (max-width: 768px) {\n    .control-group { display: flex; flex-wrap: wrap; }\n    .control-group > .ctrl-btn { flex: 1 1 160px; }\n    .speed-group, .flow-split-group { display: flex; }\n  }\n}\n

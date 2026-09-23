@@ -15,6 +15,8 @@ Aqua.WaterFlow = (function () {
   let pipeEls = [];       // todas las tuberías (.pipe)
   let overlayEls = [];    // líneas punteadas animadas que representan el agua moviéndose
   let flowing = false;    // si el flujo general está activo (bomba encendida y sin fallas que lo detengan)
+  let speedMultiplier = 1;
+  let flowOffset = 0;
 
   /**
    * Inserta, por cada tubería, una línea punteada superpuesta que se anima
@@ -32,6 +34,7 @@ Aqua.WaterFlow = (function () {
       overlay.setAttribute('d', pipe.getAttribute('d'));
       overlay.classList.add('pipe-flow-overlay');
       overlay.classList.add('paused');
+      overlay.setAttribute('stroke-dashoffset', '0');
       pipe.insertAdjacentElement('afterend', overlay);
       overlayEls.push(overlay);
     });
@@ -58,10 +61,26 @@ Aqua.WaterFlow = (function () {
    * animación de guiones). multiplier: 0.5 a 3 típicamente.
    */
   function setSpeed(multiplier) {
+    speedMultiplier = Math.max(0.1, Number(multiplier) || 1);
     if (!svgRoot) return;
-    const base = 2.6; // segundos, velocidad de referencia a 1x
-    const duration = Math.max(0.4, base / Math.max(0.1, multiplier));
+    const base = 2.6;
+    const duration = Math.max(0.4, base / speedMultiplier);
     svgRoot.style.setProperty('--flow-duration', duration + 's');
+  }
+
+  /**
+   * Avanza los puntos de flujo desde JavaScript.
+   * Esto evita diferencias entre navegadores al animar stroke-dashoffset
+   * de elementos SVG mediante CSS (especialmente Safari/WebView y algunos
+   * navegadores móviles).
+   */
+  function update(dt, multiplier) {
+    if (!flowing || !overlayEls.length || !dt) return;
+    const speed = Math.max(0.1, Number(multiplier) || speedMultiplier || 1);
+    // Equivale aproximadamente a -160 unidades cada 2.6 s a velocidad 1x.
+    flowOffset = (flowOffset - (160 / 2.6) * dt * speed) % 160;
+    const value = flowOffset.toFixed(2);
+    overlayEls.forEach((el) => el.setAttribute('stroke-dashoffset', value));
   }
 
   /**
@@ -111,6 +130,7 @@ Aqua.WaterFlow = (function () {
     setFlowing,
     isFlowing,
     setSpeed,
+    update,
     getPathInfo,
     pointAt,
     progressAtX,

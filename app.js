@@ -289,6 +289,7 @@ window.Aqua = window.Aqua || {};
     // disponibilidad de nutrientes para el crecimiento de plantas (0..1)
     const nutrientAvailability = clamp(state.sensors.nitrate / 35, 0, 1.4);
 
+    Aqua.WaterFlow.update(activeDt, state.speed);
     Aqua.Nutrients.update(activeDt, state.speed, flowing, { wasteRate: state.faults.filterClogged ? 1.4 : 1 });
     Aqua.Plants.growthTick(activeDt, state.speed, flowing ? nutrientAvailability : 0);
     Aqua.Fish.update(activeDt * state.speed);
