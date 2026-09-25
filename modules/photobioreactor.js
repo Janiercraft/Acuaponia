@@ -29,6 +29,8 @@ Aqua.Photobioreactor = (function () {
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   let lightGlowEl = null;
+  let ledCoreEl = null;
+  let ledHaloEl = null;
   let biomassRectEl = null;
   let groupEl = null;
   let statusEl = null;
@@ -131,6 +133,8 @@ Aqua.Photobioreactor = (function () {
   function init(svgSelector) {
     const svgRoot = typeof svgSelector === 'string' ? document.querySelector(svgSelector) : svgSelector;
     lightGlowEl = svgRoot.querySelector('#pbrLightGlow');
+    ledCoreEl = svgRoot.querySelector('#pbrLedCore');
+    ledHaloEl = svgRoot.querySelector('#pbrLedGlow');
     biomassRectEl = svgRoot.querySelector('#pbrBiomassRect');
     groupEl = svgRoot.querySelector('#pbrUnit');
     statusEl = svgRoot.querySelector('#pbrStatusTxt');
@@ -173,10 +177,23 @@ Aqua.Photobioreactor = (function () {
    * `data`: { light, active, biomass (0..1), lowActivity }
    */
   function render(data) {
+    // `lit` gobierna TODA la iluminación del reactor: el resplandor general
+    // (pbrLightGlow, ya existente) y ahora también la barra LED física
+    // (pbrLedCore/pbrLedGlow) — mismo booleano, mismo lugar, ningún sistema
+    // paralelo nuevo.
+    const lit = !!data.light && data.active;
+
     if (lightGlowEl) {
-      const lit = !!data.light && data.active;
       lightGlowEl.classList.toggle('on', lit);
       lightGlowEl.classList.toggle('off', !lit);
+    }
+    if (ledCoreEl) {
+      ledCoreEl.classList.toggle('on', lit);
+      ledCoreEl.classList.toggle('off', !lit);
+    }
+    if (ledHaloEl) {
+      ledHaloEl.classList.toggle('on', lit);
+      ledHaloEl.classList.toggle('off', !lit);
     }
 
     if (groupEl) groupEl.classList.toggle('inactive', !data.active);

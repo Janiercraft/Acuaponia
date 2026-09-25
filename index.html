@@ -121,14 +121,29 @@
             <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
             </filter>
+            <filter id="pbrLedBlur" x="-120%" y="-120%" width="340%" height="340%">
+              <feGaussianBlur stdDeviation="4"/>
+            </filter>
           </defs>
 
           <!-- ===== TUBERÍAS (dibujadas primero, quedan "detrás" de los tanques) ===== -->
           <g id="pipesLayer" stroke-linecap="round" fill="none">
 
-            <!-- Tubería de retorno (bomba -> tanque de peces), decorativa -->
+            <!-- Tubería de retorno (bomba -> tanque de peces), decorativa.
+                 Va POR ARRIBA de todo el sistema (no por debajo): sale de la
+                 bomba, sube junto a su borde derecho, cruza por la franja
+                 superior del lienzo -por delante de nada, ya que pipesLayer
+                 se dibuja antes que los componentes y por lo tanto siempre
+                 queda detrás de títulos y tanques- y baja por el margen
+                 izquierdo hasta entrar al tanque de peces por el mismo punto
+                 de siempre. El id, la clase .pipe y el sentido del recorrido
+                 (empieza en la bomba, termina en el tanque) se mantienen
+                 igual que antes a propósito: nutrients.js sólo le pide a
+                 este path su progreso 0→1 mediante getPointAtLength(), así
+                 que cambiar sólo la geometría no afecta partículas, flujo,
+                 pausa ni ninguna otra animación. -->
             <path id="pipeReturn" class="pipe pipe-return"
-                  d="M1310,260 L1310,330 L1310,600 L150,600 L150,360"/>
+                  d="M1310,260 L1310,220 L1370,220 L1370,45 L15,45 L15,360 L150,360"/>
 
             <!-- Ramales estáticos hacia los tubos de plantas 1 y 3 (el tubo 2 va sobre la tubería principal) -->
             <path id="pipeBranchTop" class="pipe pipe-branch" d="M760,180 L820,180"/>
@@ -241,15 +256,44 @@
             <!-- cuerpo transparente del reactor -->
             <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-vessel" filter="url(#softShadow)"/>
 
+            <!-- Barra LED física en el lateral izquierdo interior del tanque.
+                 Representa la iluminación real que usan las microalgas para
+                 fotosintetizar. Conectada a la MISMA lógica que ya prendía
+                 pbrLightGlow (ver Aqua.Photobioreactor.render en
+                 modules/photobioreactor.js): comparte el mismo booleano
+                 `lit`, sólo se le agregan/quitan las clases on/off ahí —
+                 no es un sistema aparte. -->
+            <g id="pbrLedFixture">
+              <ellipse id="pbrLedGlow" cx="835" cy="462" rx="14" ry="24" class="pbr-led-halo off"/>
+              <rect x="828" y="440" width="8" height="44" rx="3" class="pbr-led-housing"/>
+              <rect id="pbrLedCore" x="831" y="443" width="2" height="38" rx="1" class="pbr-led-core off"/>
+            </g>
+
             <!-- tinte verde del agua: se intensifica con la biomasa, sin tapar
                  nunca del todo las paredes/burbujas/iluminación (ver sección 11) -->
             <rect id="pbrWaterTint" x="822" y="434" width="336" height="56" rx="10" class="pbr-water-tint"/>
 
-            <!-- iluminación (se atenúa cuando la luz está apagada) -->
+            <!-- iluminación general del tanque (se atenúa cuando la luz está apagada) -->
             <rect id="pbrLightGlow" x="820" y="432" width="340" height="60" rx="12" class="pbr-light-glow on"/>
 
             <!-- nivel de biomasa/microalgas, crece igual que la carga del filtro -->
             <rect id="pbrBiomassRect" x="826" y="486" width="328" height="0" rx="4" class="pbr-biomass-fill"/>
+
+            <!-- Difusor/piedra de CO₂ en el fondo interior: origen físico
+                 visible de las burbujas (sección 2). Las burbujas de
+                 pbrBubbleGroup ya nacían exactamente en esta franja (cy=485),
+                 así que sólo se les agrega debajo el dispositivo del que
+                 visualmente salen — se reutiliza la animación existente tal
+                 cual, sin tocarla. -->
+            <g id="pbrDiffuser">
+              <rect x="836" y="483" width="288" height="5" rx="2.5" class="pbr-diffuser-body"/>
+              <circle class="pbr-diffuser-pore" cx="850" cy="485.5" r="0.9"/>
+              <circle class="pbr-diffuser-pore" cx="895" cy="485.5" r="0.9"/>
+              <circle class="pbr-diffuser-pore" cx="955" cy="485.5" r="0.9"/>
+              <circle class="pbr-diffuser-pore" cx="1015" cy="485.5" r="0.9"/>
+              <circle class="pbr-diffuser-pore" cx="1075" cy="485.5" r="0.9"/>
+              <circle class="pbr-diffuser-pore" cx="1110" cy="485.5" r="0.9"/>
+            </g>
 
             <!-- microalgas: este grupo empieza vacío a propósito. Las colonias
                  y filamentos se generan una sola vez en JS (ver
@@ -259,7 +303,7 @@
                  memoria por acumulación de nodos SVG. -->
             <g id="pbrAlgaeGroup" class="algae-group"></g>
 
-            <!-- burbujas de aireación, suben desde el fondo -->
+            <!-- burbujas de aireación/CO₂, suben desde el difusor del fondo -->
             <g id="pbrBubbleGroup" class="bubble-group">
               <circle class="bubble bub1" cx="850" cy="485" r="2.4"/>
               <circle class="bubble bub2" cx="895" cy="485" r="2"/>
@@ -270,6 +314,24 @@
             </g>
 
             <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-outline"/>
+
+            <!-- Manguera de CO₂ hacia la bomba externa. Trazo delgado y
+                 punteado a propósito -sin la clase .pipe-, para que no lo
+                 recoja el selector genérico de waterFlow.js ni se confunda
+                 con pipeMain/pipeReturn/pipePBR, que transportan agua.
+                 Se desplaza del centro (x=990) para no pasar justo detrás
+                 de la etiqueta de crecimiento/estado del reactor. -->
+            <path id="co2Hose" class="co2-hose" d="M870,488 L870,548"/>
+
+            <!-- Bomba/compresor de CO₂, fuera del tanque, conectada por la
+                 manguera anterior al difusor del fondo. -->
+            <g id="co2PumpUnit">
+              <rect x="866" y="542" width="8" height="8" class="co2-pump-nozzle"/>
+              <rect x="815" y="548" width="110" height="40" rx="8" class="co2-pump-body" filter="url(#softShadow)"/>
+              <circle cx="840" cy="568" r="9" class="co2-pump-vent-ring"/>
+              <path d="M840,560 L840,576 M832,568 L848,568" class="co2-pump-vent-cross"/>
+              <text class="co2-pump-label" x="888" y="572">BOMBA CO₂</text>
+            </g>
 
             <text id="pbrGrowthLabel" class="comp-sub" x="990" y="509">🟢 biomasa 5% · iniciando</text>
             <text id="pbrStatusTxt" class="comp-status" x="990" y="523">OK</text>
