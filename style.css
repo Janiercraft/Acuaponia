@@ -35,8 +35,11 @@
   --plant-green-dark: #2f6b2c;
 
   /* --- fotobiorreactor --- */
-  --pbr-glass: rgba(93, 200, 210, 0.20);
-  --pbr-glass-outline: #5dc8d2;
+  --pbr-glass: rgba(18, 26, 30, 0.72);
+  --pbr-glass-outline: #4a6b72;
+  --pbr-frame-white: #e9efec;
+  --pbr-frame-shadow: #b9c2bc;
+  --pbr-tray-color: #cfd6d1;
   --pbr-glow-warm: #ffd76b;
   --algae-color: #5fcf93;
   --bubble-color: #cdeef1;
@@ -345,10 +348,70 @@ main { margin-top: 18px; }
   display: block;
 }
 
+/* Contenedor de la escena WebGL (Three.js). A diferencia del <svg>
+   anterior, un <canvas>/<div> no tiene una relación de aspecto propia
+   ligada a un viewBox, así que se la damos explícitamente con
+   aspect-ratio — con eso solo, el contenedor ya es responsive en
+   cualquier ancho de pantalla sin necesitar reglas repetidas en cada
+   media query (las que existían abajo apuntaban a #systemSvg, que ya no
+   está en el documento, así que quedan inertes sin causar conflicto).
+   modules/three/core.js escucha "resize" y actualiza cámara/renderer al
+   tamaño real que termine teniendo este contenedor. */
+#three-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 520px;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #0a1211;
+  cursor: grab;
+}
+#three-container:active { cursor: grabbing; }
+#three-container canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+}
+
+/* Etiquetas 3D (CSS2DRenderer): mismo lenguaje visual que las tarjetas
+   del resto de la interfaz, ancladas a un punto de la escena y siempre
+   legibles de frente sin importar el ángulo de la cámara. */
+.label3d {
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  text-align: center;
+  white-space: nowrap;
+}
+.label3d-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-light);
+  background: rgba(13, 22, 21, 0.72);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.label3d-sub {
+  margin-top: 2px;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
 .quick-status {
   position: absolute;
   top: 22px;
   left: 22px;
+  z-index: 10;
   display: flex;
   gap: 14px;
   background: rgba(13, 22, 21, 0.78);
@@ -356,6 +419,30 @@ main { margin-top: 18px; }
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   padding: 8px 14px;
+}
+
+/* Mensaje visible cuando la escena 3D no pudo iniciar (ver core.js →
+   showFatalError). Si todo carga bien, este bloque nunca se crea. */
+.three-fatal-error {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-light);
+  background: rgba(13, 22, 21, 0.92);
+}
+.three-fatal-error code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .qs-item { display: flex; flex-direction: column; align-items: flex-start; }
@@ -421,7 +508,19 @@ main { margin-top: 18px; }
 
 .pipe-node { fill: var(--metal); stroke: var(--bg-panel); stroke-width: 2; }
 
+/* Línea de suelo: referencia visual de "vista lateral" — todo lo que se
+   apoya en el piso llega hasta aquí, igual que en las fotos reales del
+   sistema (tanque IBC, barriles, mesa de cultivo sobre bloques). */
+.ground-line { stroke: var(--border-soft); stroke-width: 2; opacity: 0.6; }
+
+/* Flechas de sentido del flujo, sobre la tubería de suministro (arriba) y
+   la de retorno (abajo) — un refuerzo visual simple para que el sentido
+   sea evidente incluso en una captura estática, sin depender de texto. */
+.flow-arrow { fill: var(--water-light); opacity: 0.85; }
+.flow-arrow-return { fill: var(--metal); }
+
 /* tanque de peces */
+.tank-pallet { fill: #2a3634; stroke: var(--metal-dark); stroke-width: 1; }
 .tank-body { fill: var(--tank-white-dim); }
 .tank-water { fill: url(#waterGrad); transition: y 1.2s ease, height 1.2s ease; }
 .tank-frame { opacity: 0.5; }
@@ -438,8 +537,8 @@ main { margin-top: 18px; }
 .fish-eye { fill: #1a1a1a; }
 
 /* filtro mecánico */
-.vessel-body { fill: var(--tank-white-dim); }
-.vessel-body-bio { fill: #2a3f3a; }
+.vessel-body { fill: #3d6690; }
+.vessel-body-bio { fill: #2d4a63; }
 .vessel-outline { fill: none; stroke: var(--metal); stroke-width: 3; }
 .filter-mesh line { stroke: var(--metal-dark); stroke-width: 1.5; opacity: 0.5; }
 .filter-load { fill: var(--waste-brown); opacity: 0.75; transition: height 0.8s ease, y 0.8s ease; }
@@ -464,9 +563,12 @@ main { margin-top: 18px; }
 
 .bacteria-group.stressed .bacterium { fill: var(--alert-red); }
 
-/* tubos con plantas */
+/* tubos con plantas, ahora elevados sobre soportes tipo bloque (vista lateral) */
 .bed-frame { stroke: var(--border-soft); stroke-width: 1.5; stroke-dasharray: 4 4; }
 .tube-body { fill: var(--tube-cream); stroke: var(--tube-cream-dark); stroke-width: 2; }
+
+.bed-leg { fill: #c7c2b8; stroke: #a39d8f; stroke-width: 1; }
+.bed-leg-groove { fill: #a39d8f; opacity: 0.6; }
 
 .plant-hole { fill: #4a3418; }
 
@@ -480,6 +582,17 @@ main { margin-top: 18px; }
    vidrio traslúcido + iluminación cálida, en vez de tanque opaco oscuro) */
 .pbr-vessel { fill: var(--pbr-glass); }
 .pbr-outline { fill: none; stroke: var(--pbr-glass-outline); stroke-width: 2.5; }
+
+/* Marco blanco redondeado + bandeja central, inspirados directamente en
+   la torre de cultivo de referencia: estructura limpia y moderna que
+   sostiene al cilindro oscuro (el reactor real). Son formas estáticas,
+   sin animación — sólo el contenido del cilindro se mueve. */
+.pbr-frame-base { fill: var(--pbr-frame-white); stroke: var(--pbr-frame-shadow); stroke-width: 1; }
+.pbr-frame-post { fill: var(--pbr-frame-white); stroke: var(--pbr-frame-shadow); stroke-width: 1; }
+.pbr-frame-bar { fill: var(--pbr-frame-white); stroke: var(--pbr-frame-shadow); stroke-width: 1; }
+.pbr-tray { fill: var(--pbr-tray-color); stroke: var(--pbr-frame-shadow); stroke-width: 1; }
+.pbr-tray-screen { fill: #182022; }
+.pbr-tray-dot { fill: var(--ok-green); opacity: 0.85; }
 
 /* Barra LED física en el lateral izquierdo del reactor. Housing y núcleo
    sólo cambian fill/opacity (nunca transform), así que conectarlos al
@@ -1385,7 +1498,7 @@ body {
     min-width: 0;
     max-width: 100%;
     height: auto;
-    aspect-ratio: 1440 / 660;
+    aspect-ratio: 2000 / 800;
   }
 
   .quick-status {
@@ -1579,7 +1692,7 @@ body {
     min-width: 0;
     max-width: 100%;
     height: auto;
-    aspect-ratio: 1440 / 660;
+    aspect-ratio: 2000 / 800;
   }
 
   .quick-status {
@@ -1674,3 +1787,29 @@ body {
   .tab-btn { padding-inline: 5px; font-size: .78rem; }
   .speed-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+@media (max-width: 900px){#three-container{min-height:340px;}}
+@media (max-width: 640px){#three-container{min-height:280px;aspect-ratio:4/3;}}
+
+
+/* ===== Ajustes finales de la escena 3D ===== */
+#view-simulation .svg-wrap {
+  overflow: hidden !important;
+}
+#three-container {
+  margin-inline: auto;
+}
+#three-container canvas {
+  object-position: center center;
+}
+@media (max-width: 900px) {
+  #three-container { min-height: 420px; }
+}
+@media (max-width: 640px) {
+  #three-container { min-height: 340px; aspect-ratio: 4 / 3; }
+}
+
+
+/* v6: indicadores rápidos de biomasa y crecimiento vegetal */
+.quick-status { flex-wrap: wrap; max-width: min(720px, calc(100% - 44px)); }
+.qs-progress-item .qs-value { color: #9fe7b6; font-weight: 600; }

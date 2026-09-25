@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
 </head>
 <body>
 
@@ -41,6 +42,7 @@
         <span id="playIcon">▶</span> <span id="playLabel">Iniciar</span>
       </button>
       <button id="btnReset" class="ctrl-btn" title="Reiniciar la simulación">↻ Reiniciar</button>
+      <button id="btnFrameAll" class="ctrl-btn" title="Recentrar y encuadrar toda la maqueta 3D">⟳ Centrar vista</button>
     </div>
 
     <div class="control-group speed-group">
@@ -106,258 +108,13 @@
     <section id="view-simulation" class="view active">
 
       <div class="svg-wrap">
-        <svg id="systemSvg" viewBox="0 0 1440 660" xmlns="http://www.w3.org/2000/svg" role="img"
-             aria-label="Diagrama animado del sistema acuapónico">
-
-          <!-- ===== DEFINICIONES ===== -->
-          <defs>
-            <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="var(--water-light)"/>
-              <stop offset="100%" stop-color="var(--water)"/>
-            </linearGradient>
-            <pattern id="metalMesh" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M0 0 L14 14 M14 0 L0 14" stroke="var(--metal)" stroke-width="1" opacity="0.35"/>
-            </pattern>
-            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
-            </filter>
-            <filter id="pbrLedBlur" x="-120%" y="-120%" width="340%" height="340%">
-              <feGaussianBlur stdDeviation="4"/>
-            </filter>
-          </defs>
-
-          <!-- ===== TUBERÍAS (dibujadas primero, quedan "detrás" de los tanques) ===== -->
-          <g id="pipesLayer" stroke-linecap="round" fill="none">
-
-            <!-- Tubería de retorno (bomba -> tanque de peces), decorativa.
-                 Va POR ARRIBA de todo el sistema (no por debajo): sale de la
-                 bomba, sube junto a su borde derecho, cruza por la franja
-                 superior del lienzo -por delante de nada, ya que pipesLayer
-                 se dibuja antes que los componentes y por lo tanto siempre
-                 queda detrás de títulos y tanques- y baja por el margen
-                 izquierdo hasta entrar al tanque de peces por el mismo punto
-                 de siempre. El id, la clase .pipe y el sentido del recorrido
-                 (empieza en la bomba, termina en el tanque) se mantienen
-                 igual que antes a propósito: nutrients.js sólo le pide a
-                 este path su progreso 0→1 mediante getPointAtLength(), así
-                 que cambiar sólo la geometría no afecta partículas, flujo,
-                 pausa ni ninguna otra animación. -->
-            <path id="pipeReturn" class="pipe pipe-return"
-                  d="M1310,260 L1310,220 L1370,220 L1370,45 L15,45 L15,360 L150,360"/>
-
-            <!-- Ramales estáticos hacia los tubos de plantas 1 y 3 (el tubo 2 va sobre la tubería principal) -->
-            <path id="pipeBranchTop" class="pipe pipe-branch" d="M760,180 L820,180"/>
-            <path id="pipeBranchBottom" class="pipe pipe-branch" d="M760,340 L820,340"/>
-            <path id="pipeManifold" class="pipe pipe-branch" d="M760,180 L760,340"/>
-
-            <path id="pipeCollectTop" class="pipe pipe-branch" d="M1160,180 L1200,180"/>
-            <path id="pipeCollectBottom" class="pipe pipe-branch" d="M1160,340 L1200,340"/>
-            <path id="pipeCollector" class="pipe pipe-branch" d="M1200,180 L1200,340"/>
-
-            <!-- Rama del fotobiorreactor: se desprende en el mismo punto de
-                 bifurcación (760,260) que alimenta a las plantas, baja hasta
-                 el fotobiorreactor, lo atraviesa y vuelve a subir hasta el
-                 mismo punto de convergencia (1200,260) antes de la bomba.
-                 Es UNA sola tubería (igual que pipeMain/pipeReturn), así que
-                 waterFlow.js la detecta automáticamente por su clase .pipe
-                 y nutrients.js la usa como camino de partículas. -->
-            <path id="pipePBR" class="pipe pipe-branch"
-                  d="M760,260 L760,462 L820,462 L1160,462 L1200,462 L1200,260"/>
-
-            <!-- Tubería principal: peces -> filtro -> biofiltro -> tubo central -> bomba -->
-            <path id="pipeMain" class="pipe pipe-main"
-                  d="M260,260 L340,260 L490,260 L570,260 L720,260 L760,260 L820,260 L1160,260 L1200,260 L1250,260 L1310,260"/>
-
-            <!-- Nodos de unión (decorativos) -->
-            <circle class="pipe-node" cx="760" cy="260" r="4"/>
-            <circle class="pipe-node" cx="1200" cy="260" r="4"/>
-          </g>
-
-          <!-- ===== TANQUE DE PECES ===== -->
-          <g id="fishTank" class="component">
-            <text class="comp-label" x="150" y="145">TANQUE DE PECES</text>
-            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-body" filter="url(#softShadow)"/>
-            <rect id="fishWaterRect" x="52" y="200" width="196" height="148" rx="8" class="tank-water"/>
-            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-frame" fill="url(#metalMesh)"/>
-            <rect x="40" y="160" width="220" height="200" rx="14" class="tank-outline"/>
-
-            <!-- peces -->
-            <g id="fishGroup" clip-path="none">
-              <g class="fish fish-1"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
-              <g class="fish fish-2"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
-              <g class="fish fish-3"><path d="M0,0 C6,-6 16,-6 22,0 C16,6 6,6 0,0 Z M22,0 L30,-6 L30,6 Z" class="fish-body"/><circle cx="4" cy="-1" r="1.3" class="fish-eye"/></g>
-            </g>
-
-            <text class="comp-sub" x="150" y="378">🐟 peces · desechos</text>
-          </g>
-
-          <!-- ===== FILTRO MECÁNICO ===== -->
-          <g id="filterUnit" class="component">
-            <text class="comp-label" x="415" y="178">FILTRO MECÁNICO</text>
-            <rect x="340" y="190" width="150" height="140" rx="10" class="vessel-body" filter="url(#softShadow)"/>
-            <rect id="filterLoadRect" x="346" y="316" width="138" height="0" class="filter-load"/>
-            <rect x="340" y="190" width="150" height="140" rx="10" class="vessel-outline"/>
-            <g id="filterMesh" class="filter-mesh">
-              <line x1="352" y1="215" x2="478" y2="215"/>
-              <line x1="352" y1="235" x2="478" y2="235"/>
-              <line x1="352" y1="255" x2="478" y2="255"/>
-              <line x1="352" y1="275" x2="478" y2="275"/>
-            </g>
-            <text class="comp-sub" x="415" y="346">retiene sólidos</text>
-            <text id="filterStatusTxt" class="comp-status" x="415" y="360">OK</text>
-          </g>
-
-          <!-- ===== BIOFILTRO ===== -->
-          <g id="bioUnit" class="component">
-            <text class="comp-label" x="645" y="178">BIOFILTRO</text>
-            <rect x="570" y="190" width="150" height="140" rx="10" class="vessel-body-bio" filter="url(#softShadow)"/>
-            <rect x="570" y="190" width="150" height="140" rx="10" class="vessel-outline"/>
-            <g id="bacteriaGroup" class="bacteria-group">
-              <circle class="bacterium b1" cx="600" cy="230" r="5"/>
-              <circle class="bacterium b2" cx="630" cy="250" r="4"/>
-              <circle class="bacterium b3" cx="660" cy="225" r="5"/>
-              <circle class="bacterium b4" cx="690" cy="245" r="4"/>
-              <circle class="bacterium b5" cx="615" cy="275" r="4.5"/>
-              <circle class="bacterium b6" cx="655" cy="290" r="5"/>
-              <circle class="bacterium b7" cx="685" cy="270" r="4"/>
-            </g>
-            <text class="comp-sub" x="645" y="346">NH₃ → NO₂⁻ → NO₃⁻</text>
-            <text id="bioStatusTxt" class="comp-status" x="645" y="360">OK</text>
-          </g>
-
-          <!-- ===== TUBOS CON PLANTAS ===== -->
-          <g id="plantBed" class="component">
-            <text class="comp-label" x="990" y="108">TUBOS CON PLANTAS</text>
-            <rect x="800" y="150" width="380" height="230" rx="12" class="bed-frame" fill="none"/>
-
-            <!-- fila 1 -->
-            <g class="grow-tube" data-row="0">
-              <rect x="820" y="165" width="340" height="30" rx="15" class="tube-body"/>
-              <g class="holes-row" data-y="180"></g>
-            </g>
-            <!-- fila 2 -->
-            <g class="grow-tube" data-row="1">
-              <rect x="820" y="245" width="340" height="30" rx="15" class="tube-body"/>
-              <g class="holes-row" data-y="260"></g>
-            </g>
-            <!-- fila 3 -->
-            <g class="grow-tube" data-row="2">
-              <rect x="820" y="325" width="340" height="30" rx="15" class="tube-body"/>
-              <g class="holes-row" data-y="340"></g>
-            </g>
-
-            <text class="comp-sub" x="990" y="400">🌱 hortalizas · absorción de nutrientes</text>
-          </g>
-
-          <!-- ===== FOTOBIORREACTOR ===== -->
-          <g id="pbrUnit" class="component">
-            <text class="comp-label" x="990" y="422">FOTOBIORREACTOR</text>
-
-            <!-- cuerpo transparente del reactor -->
-            <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-vessel" filter="url(#softShadow)"/>
-
-            <!-- Barra LED física en el lateral izquierdo interior del tanque.
-                 Representa la iluminación real que usan las microalgas para
-                 fotosintetizar. Conectada a la MISMA lógica que ya prendía
-                 pbrLightGlow (ver Aqua.Photobioreactor.render en
-                 modules/photobioreactor.js): comparte el mismo booleano
-                 `lit`, sólo se le agregan/quitan las clases on/off ahí —
-                 no es un sistema aparte. -->
-            <g id="pbrLedFixture">
-              <ellipse id="pbrLedGlow" cx="835" cy="462" rx="14" ry="24" class="pbr-led-halo off"/>
-              <rect x="828" y="440" width="8" height="44" rx="3" class="pbr-led-housing"/>
-              <rect id="pbrLedCore" x="831" y="443" width="2" height="38" rx="1" class="pbr-led-core off"/>
-            </g>
-
-            <!-- tinte verde del agua: se intensifica con la biomasa, sin tapar
-                 nunca del todo las paredes/burbujas/iluminación (ver sección 11) -->
-            <rect id="pbrWaterTint" x="822" y="434" width="336" height="56" rx="10" class="pbr-water-tint"/>
-
-            <!-- iluminación general del tanque (se atenúa cuando la luz está apagada) -->
-            <rect id="pbrLightGlow" x="820" y="432" width="340" height="60" rx="12" class="pbr-light-glow on"/>
-
-            <!-- nivel de biomasa/microalgas, crece igual que la carga del filtro -->
-            <rect id="pbrBiomassRect" x="826" y="486" width="328" height="0" rx="4" class="pbr-biomass-fill"/>
-
-            <!-- Difusor/piedra de CO₂ en el fondo interior: origen físico
-                 visible de las burbujas (sección 2). Las burbujas de
-                 pbrBubbleGroup ya nacían exactamente en esta franja (cy=485),
-                 así que sólo se les agrega debajo el dispositivo del que
-                 visualmente salen — se reutiliza la animación existente tal
-                 cual, sin tocarla. -->
-            <g id="pbrDiffuser">
-              <rect x="836" y="483" width="288" height="5" rx="2.5" class="pbr-diffuser-body"/>
-              <circle class="pbr-diffuser-pore" cx="850" cy="485.5" r="0.9"/>
-              <circle class="pbr-diffuser-pore" cx="895" cy="485.5" r="0.9"/>
-              <circle class="pbr-diffuser-pore" cx="955" cy="485.5" r="0.9"/>
-              <circle class="pbr-diffuser-pore" cx="1015" cy="485.5" r="0.9"/>
-              <circle class="pbr-diffuser-pore" cx="1075" cy="485.5" r="0.9"/>
-              <circle class="pbr-diffuser-pore" cx="1110" cy="485.5" r="0.9"/>
-            </g>
-
-            <!-- microalgas: este grupo empieza vacío a propósito. Las colonias
-                 y filamentos se generan una sola vez en JS (ver
-                 modules/photobioreactor.js → buildAlgaeField) y luego sólo se
-                 revelan/mueven, nunca se crean ni se destruyen elemento a
-                 elemento en cada fotograma — así se evita cualquier fuga de
-                 memoria por acumulación de nodos SVG. -->
-            <g id="pbrAlgaeGroup" class="algae-group"></g>
-
-            <!-- burbujas de aireación/CO₂, suben desde el difusor del fondo -->
-            <g id="pbrBubbleGroup" class="bubble-group">
-              <circle class="bubble bub1" cx="850" cy="485" r="2.4"/>
-              <circle class="bubble bub2" cx="895" cy="485" r="2"/>
-              <circle class="bubble bub3" cx="955" cy="485" r="2.6"/>
-              <circle class="bubble bub4" cx="1015" cy="485" r="2"/>
-              <circle class="bubble bub5" cx="1075" cy="485" r="2.4"/>
-              <circle class="bubble bub6" cx="1125" cy="485" r="2"/>
-            </g>
-
-            <rect x="820" y="432" width="340" height="60" rx="12" class="pbr-outline"/>
-
-            <!-- Manguera de CO₂ hacia la bomba externa. Trazo delgado y
-                 punteado a propósito -sin la clase .pipe-, para que no lo
-                 recoja el selector genérico de waterFlow.js ni se confunda
-                 con pipeMain/pipeReturn/pipePBR, que transportan agua.
-                 Se desplaza del centro (x=990) para no pasar justo detrás
-                 de la etiqueta de crecimiento/estado del reactor. -->
-            <path id="co2Hose" class="co2-hose" d="M870,488 L870,548"/>
-
-            <!-- Bomba/compresor de CO₂, fuera del tanque, conectada por la
-                 manguera anterior al difusor del fondo. -->
-            <g id="co2PumpUnit">
-              <rect x="866" y="542" width="8" height="8" class="co2-pump-nozzle"/>
-              <rect x="815" y="548" width="110" height="40" rx="8" class="co2-pump-body" filter="url(#softShadow)"/>
-              <circle cx="840" cy="568" r="9" class="co2-pump-vent-ring"/>
-              <path d="M840,560 L840,576 M832,568 L848,568" class="co2-pump-vent-cross"/>
-              <text class="co2-pump-label" x="888" y="572">BOMBA CO₂</text>
-            </g>
-
-            <text id="pbrGrowthLabel" class="comp-sub" x="990" y="509">🟢 biomasa 5% · iniciando</text>
-            <text id="pbrStatusTxt" class="comp-status" x="990" y="523">OK</text>
-          </g>
-
-          <!-- ===== BOMBA / DEPÓSITO ===== -->
-          <g id="pumpUnit" class="component">
-            <text class="comp-label" x="1310" y="178">BOMBA / DEPÓSITO</text>
-            <rect x="1250" y="190" width="120" height="140" rx="16" class="barrel-body" filter="url(#softShadow)"/>
-            <rect x="1250" y="190" width="120" height="140" rx="16" class="barrel-outline"/>
-            <rect x="1262" y="178" width="96" height="18" rx="6" class="barrel-lid"/>
-            <g id="pumpRotor" class="pump-rotor" transform="translate(1310,300)">
-              <circle r="14" class="rotor-hub"/>
-              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(0)"/>
-              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(90)"/>
-              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(180)"/>
-              <path d="M0,-14 L4,-4 L-4,-4 Z" class="rotor-blade" transform="rotate(270)"/>
-            </g>
-            <circle id="pumpIndicator" cx="1360" cy="200" r="6" class="indicator-dot on"/>
-            <text class="comp-sub" x="1310" y="346">circulación</text>
-          </g>
-
-          <!-- ===== CAPA DE PARTÍCULAS (agua/nutrientes/residuos) ===== -->
-          <g id="particlesLayer"></g>
-
-        </svg>
+        <!-- Escenario 3D real (Three.js + WebGL). Reemplaza por completo al
+             SVG que estaba aquí antes: éste es ahora el único escenario
+             principal del sistema — ver modules/three/core.js, que crea
+             la escena, cámara, renderer y OrbitControls dentro de este
+             contenedor, y modules/three/labels.js, que superpone las
+             etiquetas de cada componente con CSS2DRenderer. -->
+        <div id="three-container" aria-label="Maqueta 3D interactiva del sistema acuapónico — arrastra para rotar, rueda del mouse para hacer zoom"></div>
 
         <!-- panel flotante de lectura rápida sobre el lienzo -->
         <div class="quick-status" aria-hidden="false">
@@ -365,6 +122,8 @@
           <div class="qs-item"><span class="qs-label">pH</span><span class="qs-value" id="qsPh">6.8</span></div>
           <div class="qs-item"><span class="qs-label">O₂</span><span class="qs-value" id="qsO2">7.2 mg/L</span></div>
           <div class="qs-item"><span class="qs-label">NO₃⁻</span><span class="qs-value" id="qsNitrate">30 ppm</span></div>
+          <div class="qs-item qs-progress-item"><span class="qs-label">Biomasa PBR</span><span class="qs-value" id="qsBiomass">5%</span></div>
+          <div class="qs-item qs-progress-item"><span class="qs-label">Crec. plantas</span><span class="qs-value" id="qsPlantGrowth">0%</span></div>
         </div>
       </div>
 
@@ -425,12 +184,20 @@
   </footer>
 </div>
 
-<!-- ============ SCRIPTS (orden importa: módulos primero, app.js al final) ============ -->
-<script src="modules/waterFlow.js"></script>
-<script src="modules/nutrients.js"></script>
-<script src="modules/fish.js"></script>
-<script src="modules/plants.js"></script>
-<script src="modules/photobioreactor.js"></script>
+<!-- ============ SCRIPTS =====
+     monitoring.js sigue siendo un script clásico: sólo administra paneles
+     HTML normales (tarjetas, listas), no toca el SVG/3D, así que no
+     necesitaba cambiar. La escena 3D usa un bundle clásico local para evitar CORS al abrir el archivo con doble clic.
+     Three.js se carga como script clásico desde CDN y el resto del 3D queda en un único archivo local. ============ -->
+<!-- Three.js se carga como script clásico. Esto funciona tanto al abrir index.html
+     directamente como cuando el proyecto está publicado en producción. No requiere BAT. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  if (!window.THREE) {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
+  }
+</script>
+<script src="modules/three/three-classic-bundle.js"></script>
 <script src="modules/monitoring.js"></script>
 <script src="app.js"></script>
 </body>
