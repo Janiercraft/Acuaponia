@@ -297,22 +297,29 @@ window.Aqua = window.Aqua || {};
     // Igual que en renderAll(): si el modelo 3D falló al iniciar, esto no
     // debe detener el bucle ni la simulación numérica — sólo se pierde
     // la actualización visual (peces, partículas, burbujas, rotor...).
-    if (window.__AQUA_3D_INITIALIZED__) try {
-      Aqua.WaterFlow.update(activeDt, state.speed);
-      Aqua.Nutrients.update(activeDt, state.speed, flowing, { wasteRate: state.faults.filterClogged ? 1.4 : 1 });
-      Aqua.Plants.growthTick(activeDt, state.speed, flowing ? nutrientAvailability : 0);
+    if (window.__AQUA_3D_INITIALIZED__) {
+      // Cada subsistema se actualiza de forma aislada. Un fallo puntual en una
+      // animación ya no puede congelar peces, partículas y bomba al mismo tiempo.
+      const update3D = (key, fn) => {
+        try { fn(); } catch (error) {
+          loop._visualErrors = loop._visualErrors || new Set();
+          if (!loop._visualErrors.has(key)) {
+            loop._visualErrors.add(key);
+            console.error('[AQUA 3D] Error en ' + key + ' (los demás elementos siguen animándose)', error);
+          }
+        }
+      };
+      update3D('WaterFlow', () => Aqua.WaterFlow.update(activeDt, state.speed));
+      update3D('Nutrients', () => Aqua.Nutrients.update(activeDt, state.speed, flowing, { wasteRate: state.faults.filterClogged ? 1.4 : 1 }));
+      update3D('Plants', () => Aqua.Plants.growthTick(activeDt, state.speed, flowing ? nutrientAvailability : 0));
+      update3D('Fish', () => Aqua.Fish.update(activeDt * state.speed));
+      update3D('Photobioreactor', () => Aqua.Photobioreactor.growthTick(activeDt * state.speed, state.photobioreactor.biomass, state.photobioreactor._flowIntensity));
+      update3D('Sump', () => Aqua.Sump.update(activeDt * state.speed));
+
       const plantPctEl = document.getElementById('qsPlantGrowth');
       if (plantPctEl && Aqua.Plants.getGrowthPercent) plantPctEl.textContent = Aqua.Plants.getGrowthPercent() + '%';
       const biomassPctEl = document.getElementById('qsBiomass');
       if (biomassPctEl) biomassPctEl.textContent = Math.round(state.photobioreactor.biomass * 100) + '%';
-      Aqua.Fish.update(activeDt * state.speed);
-      Aqua.Photobioreactor.growthTick(activeDt * state.speed, state.photobioreactor.biomass, state.photobioreactor._flowIntensity);
-      Aqua.Sump.update(activeDt * state.speed);
-    } catch (error) {
-      if (!loop._loggedError) {
-        loop._loggedError = true;
-        console.error('[AQUA 3D] loop(): error actualizando el modelo 3D (la simulación numérica sigue funcionando; este aviso sólo se muestra una vez para no saturar la consola)', error);
-      }
     }
 
     if (state.running) {
@@ -376,6 +383,8 @@ window.Aqua = window.Aqua || {};
 
       setRunning(false);
       updateAlerts();
+      if (Aqua.Three && Aqua.Three.clearSelection) Aqua.Three.clearSelection();
+      if (Aqua.Labels && Aqua.Labels.hideAll) Aqua.Labels.hideAll();
       renderAll();
     });
 
@@ -385,7 +394,7 @@ window.Aqua = window.Aqua || {};
     // botón exista y no rompa nada aunque el usuario lo pulse antes de
     // que la escena termine de cargar (o si nunca llegó a cargar).
     document.getElementById('btnFrameAll').addEventListener('click', () => {
-      safe3D(() => Aqua.Three.frameAll());
+      safe3D(() => { if (Aqua.Three.clearSelection) Aqua.Three.clearSelection(); Aqua.Three.frameAll(); if (Aqua.Labels && Aqua.Labels.hideAll) Aqua.Labels.hideAll(); });
     });
 
     const speedRange = document.getElementById('speedRange');

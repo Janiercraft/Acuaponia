@@ -65,7 +65,8 @@ export function computePorts() {
   const sump = LAYOUT.sump;
 
   return {
-    fishOutlet: { x: ft.center.x + ft.size.w / 2, y: ft.center.y + ft.size.h * 0.35, z: ft.center.z },
+    // salida inferior: conectada directamente al vértice más bajo del fondo cónico
+    fishOutlet: { x: ft.center.x, y: ft.center.y + 0.06, z: ft.center.z },
     fishInlet: { x: ft.center.x, y: ft.center.y + ft.size.h * 0.75, z: ft.center.z - ft.size.d / 2 },
 
     filterIn: { x: mf.center.x - mf.radius, y: mf.center.y + mf.height * 0.55, z: mf.center.z },

@@ -57,6 +57,7 @@ Aqua.Co2System = (function () {
     group.add(nozzle);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'co2Pump', name: 'Bomba CO2' });
 
     // manguera: bomba -> sube -> entra por arriba del reactor -> baja
     // hasta el difusor. Curva independiente de las tuberías de agua.

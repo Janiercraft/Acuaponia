@@ -72,6 +72,7 @@ Aqua.Biofilter = (function () {
     group.add(bactInst);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'biofilter', name: 'Biofiltro' });
     Aqua.Three.registerUpdate((dt) => {
       time += dt;
       if (bacteriaMat) {

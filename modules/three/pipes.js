@@ -45,8 +45,14 @@ Aqua.Pipes = (function () {
     const mainPipe = Aqua.Materials.pipe(0x6f8480);
     const returnPipe = Aqua.Materials.pipe(0x4a7f7a);
 
-    // --- tubería principal: peces -> filtro -> biofiltro -> bifurcación ---
-    makeCurve('fishToFilter', [P.fishOutlet, P.filterIn], 0.055, mainPipe);
+    // --- tubería principal: el agua sale por la parte más baja del embudo
+    //     del tanque y luego se dirige al filtro mecánico.
+    makeCurve('fishToFilter', [
+      P.fishOutlet,
+      { x: P.fishOutlet.x + 0.55, y: P.fishOutlet.y + 0.08, z: P.fishOutlet.z },
+      { x: P.filterIn.x - 0.35, y: 0.52, z: P.fishOutlet.z },
+      P.filterIn,
+    ], 0.055, mainPipe);
     makeCurve('filterToBio', [P.filterOut, P.bioIn], 0.055, mainPipe);
     makeCurve('throughBio', [P.bioIn, P.bioOut], 0.05, mainPipe);
     makeCurve('bioToBifurcation', [P.bioOut, P.bifurcation], 0.055, mainPipe);

@@ -59,6 +59,7 @@ Aqua.Sump = (function () {
     group.add(indicator);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'sump', name: 'Bomba / depósito' });
   }
 
   function setSpinning(active) { spinning = !!active; }

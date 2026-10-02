@@ -147,7 +147,8 @@ function computePorts() {
   const sump = LAYOUT.sump;
 
   return {
-    fishOutlet: { x: ft.center.x + ft.size.w / 2, y: ft.center.y + ft.size.h * 0.35, z: ft.center.z },
+    // salida inferior: conectada directamente al vértice más bajo del fondo cónico
+    fishOutlet: { x: ft.center.x, y: ft.center.y + 0.06, z: ft.center.z },
     fishInlet: { x: ft.center.x, y: ft.center.y + ft.size.h * 0.75, z: ft.center.z - ft.size.d / 2 },
 
     filterIn: { x: mf.center.x - mf.radius, y: mf.center.y + mf.height * 0.55, z: mf.center.z },
@@ -245,43 +246,42 @@ Aqua.Materials = {
 /* ===== core.js ===== */
 /* =========================================================================
    modules/three/core.js
-   El corazón de la escena WebGL: crea explícitamente THREE.Scene,
-   THREE.PerspectiveCamera, THREE.WebGLRenderer, OrbitControls y
-   CSS2DRenderer dentro de #three-container, arranca el bucle de
-   render/animación, y expone un pequeño registro de "callbacks de
-   actualización" para que cada módulo enganche su propia lógica de
-   fotograma a fotograma.
-
-   ROBUSTEZ DE ARRANQUE (ver diagnóstico entregado al usuario):
-   - Todo el tamaño de #three-container se mide con ResizeObserver, nunca
-     con una sola lectura síncrona de clientWidth/clientHeight que podría
-     devolver 0 si el layout con aspect-ratio todavía no se resolvió en
-     ese instante exacto.
-   - Todos los componentes "físicos" del sistema (tanques, tuberías,
-     etc.) se agregan a `systemRoot` — un THREE.Group aparte de las luces
-     y el suelo — para poder calcular un THREE.Box3 real con
-     `.setFromObject(systemRoot)` y encuadrar la cámara automáticamente
-     (frameAll()), en vez de usar sólo números fijos a mano.
+   Núcleo de la escena 3D clásica. Permite además seleccionar un
+   dispositivo con clic/tap para enfocarlo y ocultar temporalmente los
+   letreros del sistema.
    ========================================================================= */
-
-
 window.Aqua = window.Aqua || {};
-
 Aqua.Three = (function () {
-
   const log = (...args) => console.log('[AQUA 3D]', ...args);
   const logErr = (...args) => console.error('[AQUA 3D]', ...args);
-
   let scene, camera, renderer, labelRenderer, controls, container, systemRoot;
   const updateCallbacks = [];
   let clock = new THREE.Clock();
   let started = false;
   let resizeObserver = null;
+  const raycaster = new THREE.Raycaster();
+  const pointerNdc = new THREE.Vector2();
+  let pointerDown = null;
+  let selectedObject = null;
 
-  function registerUpdate(fn) {
-    updateCallbacks.push(fn);
+  function registerUpdate(fn) { updateCallbacks.push(fn); }
+  function registerSelectable(root, meta = {}) {
+    if (!root) return root;
+    root.userData = root.userData || {};
+    root.userData.aquaSelectable = true;
+    if (meta.id) root.userData.aquaDeviceId = meta.id;
+    if (meta.name) root.userData.aquaDeviceName = meta.name;
+    return root;
   }
-
+  function findSelectableAncestor(obj) {
+    let cur = obj;
+    while (cur) {
+      if (cur.userData && cur.userData.aquaSelectable) return cur;
+      if (cur === systemRoot) break;
+      cur = cur.parent;
+    }
+    return null;
+  }
   function showFatalError(message) {
     if (!container) return;
     const box = document.createElement('div');
@@ -289,72 +289,43 @@ Aqua.Three = (function () {
     box.innerHTML = `<strong>No fue posible cargar la escena 3D.</strong><br>${message}<br>Revisa la consola (F12) para más información.`;
     container.appendChild(box);
   }
-
   function init(containerSelector) {
-    container = typeof containerSelector === 'string'
-      ? document.querySelector(containerSelector)
-      : containerSelector;
-
-    if (!container) {
-      logErr('No se encontró el contenedor', containerSelector);
-      return null;
-    }
-
-    // Bundle clásico: file:// es compatible; no usamos imports ES locales.
-
+    container = typeof containerSelector === 'string' ? document.querySelector(containerSelector) : containerSelector;
+    if (!container) { logErr('No se encontró el contenedor', containerSelector); return null; }
     try {
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x101c1a);
-      // IMPORTANTE: no usamos niebla. La versión anterior podía encuadrar la cámara
-      // a una distancia cercana o superior al 'far' de la niebla y toda la maqueta
-      // terminaba mezclándose con el color de fondo, dando la impresión de un canvas vacío.
-      scene.fog = null;
+      scene.background = new THREE.Color(0x0d1615);
+      scene.fog = new THREE.Fog(0x0d1615, 16, 34);
       log('Escena creada');
-
-      // Todo lo "físico" del sistema (tanques, tuberías, peces...) vive
-      // aquí — separado de luces/suelo — para poder calcular un
-      // bounding box real y encuadrar la cámara automáticamente.
       systemRoot = new THREE.Group();
       systemRoot.name = 'systemRoot';
       scene.add(systemRoot);
-
       const { w: initW, h: initH } = getContainerSize();
       camera = new THREE.PerspectiveCamera(45, initW / initH, 0.1, 100);
       camera.position.set(11, 8, 13);
       camera.lookAt(0, 1, 0);
       log('Cámara creada', { aspect: (initW / initH).toFixed(2) });
-
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-      renderer.setClearColor(0x101c1a, 1);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(initW, initH);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
-      else if ('outputEncoding' in renderer && THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.outputColorSpace = THREE.SRGBColorSpace || undefined;
       renderer.domElement.style.position = 'relative';
       renderer.domElement.style.zIndex = '1';
       container.appendChild(renderer.domElement);
       log('Renderer creado y canvas insertado en el contenedor', { width: initW, height: initH });
-
       labelRenderer = null;
-      container.style.position = 'relative';
-
       controls = new AquaOrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.minDistance = 4;
-      controls.maxDistance = 100;
+      controls.maxDistance = 30;
       controls.maxPolarAngle = Math.PI * 0.49;
       controls.target.set(0.5, 1, 0.2);
       controls.update();
-      log('OrbitControls listos (clic izq. rotar, rueda zoom, clic der. desplazar)');
-
-      // ResizeObserver: mide el tamaño REAL del contenedor cuando el
-      // navegador termine de resolver el layout (aspect-ratio, fuentes,
-      // etc.), en vez de confiar en una sola lectura síncrona que podría
-      // devolver 0 en este instante. También cubre cualquier cambio de
-      // tamaño posterior (rotar el celular, redimensionar la ventana).
+      log('OrbitControls listos');
+      bindPicking();
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const cw = Math.round(entry.contentRect.width);
@@ -363,18 +334,15 @@ Aqua.Three = (function () {
         }
       });
       resizeObserver.observe(container);
-      // respaldo por si ResizeObserver no dispara en algún navegador viejo
       window.addEventListener('resize', () => {
         const { w, h } = getContainerSize();
         if (w > 0 && h > 0) applySize(w, h);
       });
-
       if (!started) {
         started = true;
         renderer.setAnimationLoop(animate);
         log('Bucle de animación iniciado (renderer.setAnimationLoop)');
       }
-
       return { scene, camera, renderer, controls };
     } catch (error) {
       logErr('Fallo creando la escena/renderer/controles', error);
@@ -382,16 +350,37 @@ Aqua.Three = (function () {
       return null;
     }
   }
-
+  function bindPicking() {
+    if (!renderer || !renderer.domElement) return;
+    const el = renderer.domElement;
+    el.addEventListener('pointerdown', (e) => { pointerDown = { x: e.clientX, y: e.clientY }; });
+    el.addEventListener('pointerup', (e) => {
+      if (!pointerDown) return;
+      const dx = e.clientX - pointerDown.x, dy = e.clientY - pointerDown.y;
+      pointerDown = null;
+      if (Math.hypot(dx, dy) > 8) return;
+      const picked = pickSelectable(e.clientX, e.clientY);
+      if (picked) focusObject(picked); else clearSelection();
+    });
+  }
+  function pickSelectable(clientX, clientY) {
+    if (!renderer || !camera || !systemRoot) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointerNdc, camera);
+    const hits = raycaster.intersectObjects(systemRoot.children, true);
+    for (const hit of hits) {
+      const selectable = findSelectableAncestor(hit.object);
+      if (selectable) return selectable;
+    }
+    return null;
+  }
   function getContainerSize() {
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    // valor de respaldo razonable para el primerísimo frame, por si el
-    // layout todavía no está resuelto — ResizeObserver lo corrige apenas
-    // el navegador termine de calcular el tamaño real.
+    const w = container.clientWidth, h = container.clientHeight;
     return { w: w > 0 ? w : 800, h: h > 0 ? h : 450 };
   }
-
   function applySize(w, h) {
     if (!camera || !renderer) return;
     camera.aspect = w / h;
@@ -399,7 +388,6 @@ Aqua.Three = (function () {
     renderer.setSize(w, h);
     if (labelRenderer) labelRenderer.setSize(w, h);
   }
-
   function animate() {
     const dt = Math.min(clock.getDelta(), 0.1);
     if (controls) controls.update();
@@ -409,35 +397,54 @@ Aqua.Three = (function () {
     if (renderer && scene && camera) renderer.render(scene, camera);
     if (labelRenderer) labelRenderer.render(scene, camera);
   }
-
-  /**
-   * Calcula el THREE.Box3 real de `systemRoot` (todo lo físico del
-   * sistema, sin luces ni suelo) y mueve la cámara para que quede
-   * completo dentro de campo de visión — nada de posiciones fijas a
-   * mano. La usa tanto el arranque inicial como el botón "Centrar vista".
-   */
-  function frameAll(paddingFactor = 1.18) {
-    if (!systemRoot || !camera || !controls) return;
-
-    // Encuadramos SÓLO mallas físicas. No usamos setFromObject() sobre grupos
-    // completos porque el fotobiorreactor contiene un THREE.Points de microalgas
-    // cuyas partículas todavía no visibles se guardan temporalmente en Y=-50.
-    // Eso agrandaba el bounding box, desplazaba su centro y hacía que al arrancar
-    // la cámara mirase a un punto vacío hasta que el usuario la movía con el mouse.
+  function computeBoxFor(object3d) {
     const box = new THREE.Box3();
-    systemRoot.updateMatrixWorld(true);
-    systemRoot.traverse((obj) => {
+    object3d.updateMatrixWorld(true);
+    object3d.traverse((obj) => {
       if (!obj || !obj.visible || !obj.isMesh || !obj.geometry) return;
       const meshBox = new THREE.Box3().setFromObject(obj);
       if (!meshBox.isEmpty()) box.union(meshBox);
     });
-
+    return box;
+  }
+  function frameObject(object3d, paddingFactor = 1.45) {
+    if (!object3d || !camera || !controls) return;
+    const box = computeBoxFor(object3d);
+    if (box.isEmpty()) return frameAll();
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.4);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * Math.max(camera.aspect, 0.1));
+    const distV = (size.y * 0.5) / Math.tan(vFov / 2);
+    const distH = (size.x * 0.5) / Math.tan(hFov / 2);
+    const distD = size.z * 1.2;
+    let distance = Math.max(distV, distH, distD, maxDim * 1.15) * paddingFactor;
+    distance = Math.max(2.6, Math.min(distance, 16));
+    const dir = new THREE.Vector3(0.88, 0.38, 0.78).normalize();
+    camera.position.copy(center).addScaledVector(dir, distance);
+    camera.near = 0.05;
+    camera.far = 500;
+    camera.updateProjectionMatrix();
+    const visualCenter = center.clone();
+    visualCenter.y += Math.max(0.08, size.y * 0.04);
+    controls.target.copy(visualCenter);
+    controls.minDistance = Math.max(1.2, maxDim * 0.45);
+    controls.maxDistance = 100;
+    camera.lookAt(visualCenter);
+    controls.update();
+  }
+  function focusObject(object3d) {
+    selectedObject = object3d;
+    if (window.Aqua && Aqua.Labels && Aqua.Labels.showOnly) Aqua.Labels.showOnly(object3d.userData && object3d.userData.aquaDeviceId);
+  }
+  function frameAll(paddingFactor = 1.18) {
+    if (!systemRoot || !camera || !controls) return;
+    const box = computeBoxFor(systemRoot);
     if (box.isEmpty()) {
-      // Respaldo con las dimensiones conocidas del layout.
       box.min.set(-7.4, -0.2, -3.1);
       box.max.set(8.0, 4.1, 3.8);
     }
-
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z, 1);
@@ -448,37 +455,33 @@ Aqua.Three = (function () {
     const distD = size.z * 0.9;
     let distance = Math.max(distV, distH, distD, maxDim * 0.75) * paddingFactor;
     distance = Math.max(11, Math.min(distance, 36));
-
-    // Vista isométrica clara: ligeramente desde arriba y desde el frente.
     const dir = new THREE.Vector3(0.72, 0.52, 0.86).normalize();
     camera.position.copy(center).addScaledVector(dir, distance);
     camera.near = 0.05;
-    camera.far = 500; // margen amplio; evita recortes accidentales al orbitar
+    camera.far = 500;
     camera.updateProjectionMatrix();
-
     controls.minDistance = 3;
     controls.maxDistance = 100;
-    // Apuntamos un poco por encima del centro geométrico. En una cámara en
-    // perspectiva esto desplaza visualmente la maqueta hacia el centro/bajo del
-    // viewport, evitando que quede pegada al borde superior.
     const visualCenter = center.clone();
-    visualCenter.y += Math.max(0.35, size.y * 0.10);
+    visualCenter.y += Math.max(0.20, size.y * 0.04);
     controls.target.copy(visualCenter);
     camera.lookAt(visualCenter);
     controls.update();
-
-    log('frameAll(): cámara encuadrada ' + JSON.stringify({
-      center: center.toArray().map((n) => Number(n.toFixed(2))),
-      size: size.toArray().map((n) => Number(n.toFixed(2))),
-      distance: Number(distance.toFixed(2)),
-      camera: camera.position.toArray().map((n) => Number(n.toFixed(2)))
-    }));
+    log('frameAll(): cámara encuadrada ' + JSON.stringify({ center: center.toArray().map((n) => n.toFixed(2)), size: size.toArray().map((n) => n.toFixed(2)), distance: distance.toFixed(2) }));
   }
-
+  function clearSelection(options = {}) {
+    selectedObject = null;
+    if (window.Aqua && Aqua.Labels && Aqua.Labels.hideAll) Aqua.Labels.hideAll();
+    if (options.restoreFrame) frameAll();
+  }
   return {
     init,
     registerUpdate,
+    registerSelectable,
     frameAll,
+    frameObject,
+    clearSelection,
+    getSelectedObject: () => selectedObject,
     getScene: () => scene,
     getSystemRoot: () => systemRoot,
     getCamera: () => camera,
@@ -611,8 +614,14 @@ Aqua.Pipes = (function () {
     const mainPipe = Aqua.Materials.pipe(0x6f8480);
     const returnPipe = Aqua.Materials.pipe(0x4a7f7a);
 
-    // --- tubería principal: peces -> filtro -> biofiltro -> bifurcación ---
-    makeCurve('fishToFilter', [P.fishOutlet, P.filterIn], 0.055, mainPipe);
+    // --- tubería principal: el agua sale por la parte más baja del embudo
+    //     del tanque y luego se dirige al filtro mecánico.
+    makeCurve('fishToFilter', [
+      P.fishOutlet,
+      { x: P.fishOutlet.x + 0.55, y: P.fishOutlet.y + 0.08, z: P.fishOutlet.z },
+      { x: P.filterIn.x - 0.35, y: 0.52, z: P.fishOutlet.z },
+      P.filterIn,
+    ], 0.055, mainPipe);
     makeCurve('filterToBio', [P.filterOut, P.bioIn], 0.055, mainPipe);
     makeCurve('throughBio', [P.bioIn, P.bioOut], 0.05, mainPipe);
     makeCurve('bioToBifurcation', [P.bioOut, P.bifurcation], 0.055, mainPipe);
@@ -712,66 +721,88 @@ Aqua.Pipes = (function () {
 })();
 
 /* ===== fishTank.js ===== */
-/* =========================================================================
-   modules/three/fishTank.js
-   Tanque de peces como THREE.Mesh real (BoxGeometry con ancho, alto Y
-   profundidad de verdad — no un <rect> SVG). Las paredes son
-   semitransparentes para poder ver el interior desde cualquier ángulo;
-   el agua es un segundo Mesh más pequeño, dentro del tanque, con su
-   propio material físico transparente/azulado.
-   ========================================================================= */
-
-
 window.Aqua = window.Aqua || {};
-
 Aqua.FishTank = (function () {
-
-  let waterMesh = null;
+  let waterUpperMesh = null;
+  let waterFunnelMesh = null;
   let frameGroup = null;
   const size = LAYOUT.fishTank.size;
   const center = LAYOUT.fishTank.center;
-
+  const FUNNEL_H = 0.50;
+  const BODY_H = size.h - FUNNEL_H;
+  const FUNNEL_TOP_R = Math.min(size.w, size.d) * 0.46;
+  const FUNNEL_BOTTOM_R = 0.12;
   const NORMAL_WATER_H = size.h * 0.82;
-  const LOW_WATER_H = size.h * 0.42;
+  const LOW_WATER_H = size.h * 0.52;
 
   function init() {
-    const scene = Aqua.Three.getSystemRoot(); // meshes "físicos": entran al bounding box de frameAll()
+    const scene = Aqua.Three.getSystemRoot();
     const group = new THREE.Group();
     group.position.set(center.x, size.h / 2, center.z);
-
-    // paredes del tanque: vidrio/plástico translúcido, se ven los laterales
-    // y la parte trasera al rotar la cámara (prueba de que es 3D real).
-    const wallGeo = new THREE.BoxGeometry(size.w, size.h, size.d);
     const wallMat = Aqua.Materials.glass(0xd7ded9, 0.22);
-    const walls = new THREE.Mesh(wallGeo, wallMat);
-    walls.castShadow = true;
-    walls.receiveShadow = true;
-    group.add(walls);
-
-    // estructura metálica tipo jaula IBC (referencia real del proyecto):
-    // unas pocas barras finas en las aristas verticales, suficiente para
-    // leerse como "jaula" sin modelar cada varilla.
     const edgeMat = Aqua.Materials.metal(0x8a9a95, 0.35);
-    const postGeo = new THREE.BoxGeometry(0.05, size.h, 0.05);
+
+    const upperGeo = new THREE.BoxGeometry(size.w, BODY_H, size.d);
+    const upperWalls = new THREE.Mesh(upperGeo, wallMat);
+    upperWalls.position.y = FUNNEL_H / 2;
+    upperWalls.castShadow = true;
+    upperWalls.receiveShadow = true;
+    group.add(upperWalls);
+
+    const funnelGeo = new THREE.CylinderGeometry(FUNNEL_TOP_R, FUNNEL_BOTTOM_R, FUNNEL_H, 4, 1, false);
+    funnelGeo.rotateY(Math.PI / 4);
+    const funnelShell = new THREE.Mesh(funnelGeo, wallMat);
+    funnelShell.position.y = -size.h / 2 + FUNNEL_H / 2;
+    funnelShell.castShadow = true;
+    funnelShell.receiveShadow = true;
+    group.add(funnelShell);
+
+    const postGeo = new THREE.BoxGeometry(0.05, BODY_H, 0.05);
     [
       [-size.w / 2, -size.d / 2], [size.w / 2, -size.d / 2],
       [-size.w / 2, size.d / 2], [size.w / 2, size.d / 2],
     ].forEach(([x, z]) => {
       const post = new THREE.Mesh(postGeo, edgeMat);
-      post.position.set(x, 0, z);
+      post.position.set(x, FUNNEL_H / 2, z);
       post.castShadow = true;
       group.add(post);
     });
 
-    // agua: volumen independiente dentro del tanque, con su propio alto
-    // (baja visiblemente con la falla "nivel de agua bajo").
-    const waterGeo = new THREE.BoxGeometry(size.w * 0.92, 1, size.d * 0.92);
-    waterMesh = new THREE.Mesh(waterGeo, Aqua.Materials.water(0x3f9a95));
-    waterMesh.scale.y = NORMAL_WATER_H;
-    waterMesh.position.y = -size.h / 2 + (NORMAL_WATER_H * 1) / 2;
-    group.add(waterMesh);
+    const bandGeoX = new THREE.BoxGeometry(size.w, 0.04, 0.04);
+    const bandGeoZ = new THREE.BoxGeometry(0.04, 0.04, size.d);
+    [0.25, 0.7].forEach((t) => {
+      const y = -size.h / 2 + FUNNEL_H + BODY_H * t;
+      [[0, -size.d / 2], [0, size.d / 2]].forEach(([x, z]) => {
+        const band = new THREE.Mesh(bandGeoX, edgeMat);
+        band.position.set(x, y, z);
+        group.add(band);
+      });
+      [[-size.w / 2, 0], [size.w / 2, 0]].forEach(([x, z]) => {
+        const band = new THREE.Mesh(bandGeoZ, edgeMat);
+        band.position.set(x, y, z);
+        group.add(band);
+      });
+    });
 
-    // base/pallet, para que el tanque se apoye visiblemente en el suelo.
+    waterFunnelMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(FUNNEL_TOP_R * 0.94, FUNNEL_BOTTOM_R * 1.25, FUNNEL_H, 4, 1, false),
+      Aqua.Materials.water(0x3f9a95)
+    );
+    waterFunnelMesh.geometry.rotateY(Math.PI / 4);
+    waterFunnelMesh.position.y = -size.h / 2 + FUNNEL_H / 2;
+    group.add(waterFunnelMesh);
+
+    const waterGeo = new THREE.BoxGeometry(size.w * 0.92, 1, size.d * 0.92);
+    waterUpperMesh = new THREE.Mesh(waterGeo, Aqua.Materials.water(0x3f9a95));
+    group.add(waterUpperMesh);
+    applyWaterHeight(NORMAL_WATER_H);
+
+    const outletGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.22, 14);
+    const outlet = new THREE.Mesh(outletGeo, Aqua.Materials.metal(0x7b8f8a, 0.35));
+    outlet.position.set(0, -size.h / 2 + 0.11, 0);
+    outlet.castShadow = true;
+    group.add(outlet);
+
     const palletGeo = new THREE.BoxGeometry(size.w * 1.05, 0.12, size.d * 1.05);
     const pallet = new THREE.Mesh(palletGeo, Aqua.Materials.plastic(0x38403e, 0.9));
     pallet.position.y = -size.h / 2 - 0.06;
@@ -780,35 +811,32 @@ Aqua.FishTank = (function () {
     group.add(pallet);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'fishTank', name: 'Tanque de peces' });
     frameGroup = group;
   }
 
-  /** true = nivel de agua bajo (falla), false = nivel normal. */
-  function setWaterLevel(low) {
-    if (!waterMesh) return;
-    const targetH = low ? LOW_WATER_H : NORMAL_WATER_H;
-    waterMesh.scale.y = targetH;
-    waterMesh.position.y = -size.h / 2 + targetH / 2;
+  function applyWaterHeight(totalHeight) {
+    if (!waterUpperMesh || !waterFunnelMesh) return;
+    const safeHeight = Math.max(FUNNEL_H + 0.10, Math.min(totalHeight, size.h * 0.90));
+    const upperH = Math.max(0.10, safeHeight - FUNNEL_H);
+    waterUpperMesh.scale.y = upperH;
+    waterUpperMesh.position.y = -size.h / 2 + FUNNEL_H + upperH / 2;
   }
-
+  function setWaterLevel(low) { applyWaterHeight(low ? LOW_WATER_H : NORMAL_WATER_H); }
   function setAtRisk(active) {
-    if (!waterMesh) return;
-    waterMesh.material.color.set(active ? 0x8a5a4a : 0x3f9a95);
+    if (waterUpperMesh) waterUpperMesh.material.color.set(active ? 0x8a5a4a : 0x3f9a95);
+    if (waterFunnelMesh) waterFunnelMesh.material.color.set(active ? 0x8a5a4a : 0x3f9a95);
   }
-
-  /** Límites del volumen de agua, en coordenadas del mundo — usados por
-   *  fish.js para que los peces naden dentro del tanque real. */
   function getSwimBounds() {
     return {
       minX: center.x - size.w * 0.4,
       maxX: center.x + size.w * 0.4,
-      minY: 0.25,
-      maxY: NORMAL_WATER_H * 0.85,
+      minY: 0.35,
+      maxY: NORMAL_WATER_H * 0.82,
       minZ: center.z - size.d * 0.4,
       maxZ: center.z + size.d * 0.4,
     };
   }
-
   return { init, setWaterLevel, setAtRisk, getSwimBounds };
 })();
 
@@ -971,6 +999,7 @@ Aqua.MechanicalFilter = (function () {
     group.add(outPort);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'mechanicalFilter', name: 'Filtro mecánico' });
   }
 
   function setLoad(fraction) {
@@ -1061,6 +1090,7 @@ Aqua.Biofilter = (function () {
     group.add(bactInst);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'biofilter', name: 'Biofiltro' });
     Aqua.Three.registerUpdate((dt) => {
       time += dt;
       if (bacteriaMat) {
@@ -1107,61 +1137,40 @@ Aqua.Biofilter = (function () {
 })();
 
 /* ===== growBeds.js ===== */
-/* =========================================================================
-   modules/three/growBeds.js
-   Mesa de cultivo elevada: tres canales cilíndricos horizontales sobre
-   patas reales (CylinderGeometry acostado, no un <rect> SVG), con
-   plantas (tallo + hojas) que crecen desde cada orificio. Expone la
-   misma API que antes (Aqua.Plants), así que app.js no necesitó cambiar
-   sus llamadas — sólo cambió qué hay detrás de ellas.
-   ========================================================================= */
-
-
 window.Aqua = window.Aqua || {};
-
 Aqua.Plants = (function () {
-
   const gb = LAYOUT.growBed;
-  let plants = []; // { group, growth }
-
+  let plants = [];
   function buildLeg(x, z) {
-    const legGeo = new THREE.BoxGeometry(0.12, gb.tubeY, 0.12);
-    const leg = new THREE.Mesh(legGeo, Aqua.Materials.plastic(0x2b3230, 0.85));
-    leg.position.set(x, gb.tubeY / 2, z);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, gb.tubeY - 0.22, 0.08), Aqua.Materials.metal(0x7f8f8b, 0.45));
+    leg.position.set(x, (gb.tubeY - 0.22) / 2, z);
     leg.castShadow = true;
-    leg.receiveShadow = true;
     return leg;
   }
-
   function buildPlant() {
     const group = new THREE.Group();
-    const stemMat = new THREE.MeshStandardMaterial({ color: 0x2f6b2c, roughness: 0.7 });
-    const leafMat = new THREE.MeshStandardMaterial({ color: 0x4f9b4a, roughness: 0.6 });
-
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.22, 6), stemMat);
-    stem.position.y = 0.11;
-    group.add(stem);
-
-    for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), leafMat);
-      leaf.scale.set(1.3, 0.4, 0.9);
-      const ang = (i / 3) * Math.PI * 2;
-      leaf.position.set(Math.cos(ang) * 0.06, 0.16 + i * 0.03, Math.sin(ang) * 0.06);
-      leaf.rotation.y = ang;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 8), new THREE.MeshStandardMaterial({ color: 0x4e7f3a, roughness: 0.75 }));
+    stem.position.y = 0.11; group.add(stem);
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x66a848, roughness: 0.65, side: THREE.DoubleSide });
+    const leafGeo = new THREE.SphereGeometry(0.08, 10, 8, 0, Math.PI, 0, Math.PI / 1.8);
+    for (let i = 0; i < 5; i++) {
+      const leaf = new THREE.Mesh(leafGeo, leafMat);
+      leaf.position.y = 0.18 + (i % 2) * 0.03;
+      leaf.rotation.x = Math.PI / 2.2;
+      leaf.rotation.z = (i / 5) * Math.PI * 2;
+      leaf.rotation.y = (i / 5) * Math.PI * 2;
       group.add(leaf);
     }
-
-    group.scale.setScalar(0.001); // arranca prácticamente invisible
-    group.castShadow = true;
+    group.scale.setScalar(0.15);
     return group;
   }
-
   function init() {
-    const scene = Aqua.Three.getSystemRoot(); // meshes "físicos": entran al bounding box de frameAll()
+    const scene = Aqua.Three.getSystemRoot();
+    const root = new THREE.Group();
+    scene.add(root);
+    Aqua.Three.registerSelectable(root, { id: 'growBeds', name: 'Área de crecimiento' });
     plants = [];
-
     gb.zRows.forEach((z) => {
-      // canal (tubo horizontal, acostado sobre el eje X)
       const length = gb.xEnd - gb.xStart;
       const tubeGeo = new THREE.CylinderGeometry(gb.tubeRadius, gb.tubeRadius, length, 20);
       tubeGeo.rotateZ(Math.PI / 2);
@@ -1169,58 +1178,43 @@ Aqua.Plants = (function () {
       tube.position.set((gb.xStart + gb.xEnd) / 2, gb.tubeY, z);
       tube.castShadow = true;
       tube.receiveShadow = true;
-      scene.add(tube);
-
-      // patas de soporte en ambos extremos del canal
-      scene.add(buildLeg(gb.xStart + 0.15, z));
-      scene.add(buildLeg(gb.xEnd - 0.15, z));
-
-      // plantas distribuidas a lo largo del canal, saliendo por arriba
+      root.add(tube);
+      root.add(buildLeg(gb.xStart + 0.15, z));
+      root.add(buildLeg(gb.xEnd - 0.15, z));
       for (let i = 0; i < gb.holesPerRow; i++) {
         const t = (i + 0.5) / gb.holesPerRow;
         const x = THREE.MathUtils.lerp(gb.xStart + 0.2, gb.xEnd - 0.2, t);
         const plant = buildPlant();
         plant.position.set(x, gb.tubeY + gb.tubeRadius, z);
-        scene.add(plant);
+        root.add(plant);
         plants.push({ group: plant, growth: 0 });
       }
     });
   }
-
-  /** Igual firma que antes: dt real, multiplicador de velocidad, y
-   *  disponibilidad de nutrientes (0..1) ya calculada en app.js. */
   function growthTick(dt, speed, nutrientAvailability) {
     if (dt <= 0) return;
-    const rate = 0.05 * Math.max(0, nutrientAvailability) * speed * dt;
-    plants.forEach((p) => {
-      p.growth = Math.min(1, p.growth + rate);
-      const s = 0.05 + p.growth * 0.95;
+    const growthRate = 0.0019 * Math.max(0, nutrientAvailability) * Math.max(0.25, speed);
+    plants.forEach((p, idx) => {
+      p.growth = Math.min(1, p.growth + dt * growthRate * (0.92 + (idx % 6) * 0.035));
+      const s = 0.15 + p.growth * 0.95;
       p.group.scale.setScalar(s);
+      p.group.rotation.y += dt * 0.12 * (0.5 + (idx % 5) * 0.08);
     });
   }
-
-  /** Evento puntual: una raíz absorbe nutrientes — una planta al azar da
-   *  un salto de crecimiento, igual que en la versión 2D. */
   function absorbTick() {
     if (!plants.length) return;
     const p = plants[Math.floor(Math.random() * plants.length)];
     p.growth = Math.min(1, p.growth + 0.05);
-    p.group.scale.setScalar(0.05 + p.growth * 0.95);
+    p.group.scale.setScalar(0.15 + p.growth * 0.95);
   }
-
   function reset() {
-    plants.forEach((p) => {
-      p.growth = 0;
-      p.group.scale.setScalar(0.001);
-    });
+    plants.forEach((p) => { p.growth = 0; p.group.scale.setScalar(0.15); });
   }
-
   function getGrowthPercent() {
     if (!plants.length) return 0;
-    const avg = plants.reduce((sum, p) => sum + p.growth, 0) / plants.length;
-    return Math.round(Math.min(1, Math.max(0, avg)) * 100);
+    const avg = plants.reduce((acc, p) => acc + p.growth, 0) / plants.length;
+    return Math.round(avg * 100);
   }
-
   return { init, growthTick, absorbTick, reset, getGrowthPercent };
 })();
 
@@ -1284,6 +1278,7 @@ Aqua.Sump = (function () {
     group.add(indicator);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'sump', name: 'Bomba / depósito' });
   }
 
   function setSpinning(active) { spinning = !!active; }
@@ -1522,6 +1517,7 @@ Aqua.Photobioreactor = (function () {
     buildBiomassGauge(group);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'photobioreactor', name: 'Fotobiorreactor' });
 
     Aqua.Three.registerUpdate((dt) => update(dt));
   }
@@ -1678,6 +1674,7 @@ Aqua.Co2System = (function () {
     group.add(nozzle);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'co2Pump', name: 'Bomba CO2' });
 
     // manguera: bomba -> sube -> entra por arriba del reactor -> baja
     // hasta el difusor. Curva independiente de las tuberías de agua.
@@ -1946,6 +1943,8 @@ Aqua.Nutrients = (function () {
 /* ===== labels.js ===== */
 window.Aqua = window.Aqua || {};
 Aqua.Labels = (function () {
+  const labels = [];
+  const labelsById = new Map();
   function makeTexture(text, sub) {
     const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=128;
     const c=canvas.getContext('2d');
@@ -1955,22 +1954,28 @@ Aqua.Labels = (function () {
     if(sub){c.fillStyle='#93b7b0'; c.font='20px Arial'; c.fillText(sub,256,88);}
     const tex=new THREE.CanvasTexture(canvas); tex.needsUpdate=true; return tex;
   }
-  function add(text,x,y,z,sub){
+  function add(id,text,x,y,z,sub){
     const root=Aqua.Three.getSystemRoot();
     const mat=new THREE.SpriteMaterial({map:makeTexture(text,sub),transparent:true,depthTest:false,depthWrite:false});
-    const s=new THREE.Sprite(mat); s.position.set(x,y,z); s.scale.set(2.65,.66,1); s.renderOrder=1000; root.add(s); return s;
+    const s=new THREE.Sprite(mat);
+    s.position.set(x,y,z); s.scale.set(2.65,.66,1); s.renderOrder=1000; s.visible=false;
+    root.add(s); labels.push(s); if(id) labelsById.set(id,s); return s;
   }
+  function hideAll(){ labels.forEach((label)=>{ label.visible=false; }); }
+  function showOnly(id){ hideAll(); const label=labelsById.get(id); if(label) label.visible=true; }
+  function setVisible(visible){ if(!visible) hideAll(); }
   function init(){
     const ft=LAYOUT.fishTank,mf=LAYOUT.mechanicalFilter,bf=LAYOUT.biofilter,gb=LAYOUT.growBed,pbr=LAYOUT.photobioreactor,co2=LAYOUT.co2Pump,sump=LAYOUT.sump;
-    add('TANQUE DE PECES',ft.center.x,ft.size.h+.35,ft.center.z,'peces · desechos');
-    add('FILTRO MECÁNICO',mf.center.x,mf.height+.35,mf.center.z,'retiene sólidos');
-    add('BIOFILTRO',bf.center.x,bf.height+.35,bf.center.z,'NH₃ → NO₂⁻ → NO₃⁻');
-    add('ÁREA DE CRECIMIENTO',(gb.xStart+gb.xEnd)/2,gb.tubeY+.55,gb.zRows[0]+.2,'hortalizas');
-    add('FOTOBIORREACTOR',pbr.center.x,pbr.baseHeight+pbr.height+.4,pbr.center.z,'microalgas');
-    add('BOMBA CO₂',co2.center.x,co2.size.h+.3,co2.center.z);
-    add('BOMBA / DEPÓSITO',sump.center.x,sump.size.h+.35,sump.center.z,'circulación');
+    add('fishTank','TANQUE DE PECES',ft.center.x,ft.size.h+.35,ft.center.z,'peces · desechos');
+    add('mechanicalFilter','FILTRO MECÁNICO',mf.center.x,mf.height+.35,mf.center.z,'retiene sólidos');
+    add('biofilter','BIOFILTRO',bf.center.x,bf.height+.35,bf.center.z,'NH₃ → NO₂⁻ → NO₃⁻');
+    add('growBeds','ÁREA DE CRECIMIENTO',(gb.xStart+gb.xEnd)/2,gb.tubeY+.55,gb.zRows[0]+.2,'hortalizas');
+    add('photobioreactor','FOTOBIORREACTOR',pbr.center.x,pbr.baseHeight+pbr.height+.4,pbr.center.z,'microalgas');
+    add('co2Pump','BOMBA CO₂',co2.center.x,co2.size.h+.3,co2.center.z);
+    add('sump','BOMBA / DEPÓSITO',sump.center.x,sump.size.h+.35,sump.center.z,'circulación');
+    hideAll();
   }
-  return {init,add};
+  return {init,add,hideAll,showOnly,setVisible};
 })();
 
 window.__AQUA_THREE_READY__=true; console.log('[AQUA 3D] Bundle clásico listo'); window.dispatchEvent(new CustomEvent('aqua-three-ready'));

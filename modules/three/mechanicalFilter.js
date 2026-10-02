@@ -47,6 +47,7 @@ Aqua.MechanicalFilter = (function () {
     group.add(outPort);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'mechanicalFilter', name: 'Filtro mecánico' });
   }
 
   function setLoad(fraction) {

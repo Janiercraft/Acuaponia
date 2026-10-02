@@ -216,6 +216,7 @@ Aqua.Photobioreactor = (function () {
     buildBiomassGauge(group);
 
     scene.add(group);
+    Aqua.Three.registerSelectable(group, { id: 'photobioreactor', name: 'Fotobiorreactor' });
 
     Aqua.Three.registerUpdate((dt) => update(dt));
   }

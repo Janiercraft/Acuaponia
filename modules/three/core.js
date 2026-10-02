@@ -7,16 +7,9 @@
    actualización" para que cada módulo enganche su propia lógica de
    fotograma a fotograma.
 
-   ROBUSTEZ DE ARRANQUE (ver diagnóstico entregado al usuario):
-   - Todo el tamaño de #three-container se mide con ResizeObserver, nunca
-     con una sola lectura síncrona de clientWidth/clientHeight que podría
-     devolver 0 si el layout con aspect-ratio todavía no se resolvió en
-     ese instante exacto.
-   - Todos los componentes "físicos" del sistema (tanques, tuberías,
-     etc.) se agregan a `systemRoot` — un THREE.Group aparte de las luces
-     y el suelo — para poder calcular un THREE.Box3 real con
-     `.setFromObject(systemRoot)` y encuadrar la cámara automáticamente
-     (frameAll()), en vez de usar sólo números fijos a mano.
+   Además, esta versión permite seleccionar un dispositivo con clic/tap:
+   al enfocarlo se ocultan las etiquetas del sistema para despejar la vista;
+   al limpiar la selección se restablece la vista general con etiquetas.
    ========================================================================= */
 
 import * as THREE from 'three';
@@ -35,9 +28,32 @@ Aqua.Three = (function () {
   let clock = new THREE.Clock();
   let started = false;
   let resizeObserver = null;
+  const raycaster = new THREE.Raycaster();
+  const pointerNdc = new THREE.Vector2();
+  let pointerDown = null;
+  let selectedObject = null;
 
   function registerUpdate(fn) {
     updateCallbacks.push(fn);
+  }
+
+  function registerSelectable(root, meta = {}) {
+    if (!root) return root;
+    root.userData = root.userData || {};
+    root.userData.aquaSelectable = true;
+    if (meta.id) root.userData.aquaDeviceId = meta.id;
+    if (meta.name) root.userData.aquaDeviceName = meta.name;
+    return root;
+  }
+
+  function findSelectableAncestor(obj) {
+    let cur = obj;
+    while (cur) {
+      if (cur.userData && cur.userData.aquaSelectable) return cur;
+      if (cur === systemRoot) break;
+      cur = cur.parent;
+    }
+    return null;
   }
 
   function showFatalError(message) {
@@ -58,10 +74,6 @@ Aqua.Three = (function () {
       return null;
     }
 
-    // Si el proyecto se abrió con file:// en vez de un servidor HTTP, los
-    // módulos ES entre archivos locales quedan bloqueados por CORS en la
-    // mayoría de navegadores — avisamos explícitamente en vez de dejar el
-    // panel en blanco sin explicación (sección 7 del diagnóstico pedido).
     if (location.protocol === 'file:') {
       logErr('El proyecto se abrió con file:// — los módulos ES (import) no cargan así en la mayoría de navegadores.');
       showFatalError('Este proyecto usa módulos ES (import) y necesita abrirse desde un servidor HTTP, no con doble clic.<br>Ejemplo: <code>python -m http.server 5500</code> y luego abre <code>http://localhost:5500</code>.');
@@ -74,9 +86,6 @@ Aqua.Three = (function () {
       scene.fog = new THREE.Fog(0x0d1615, 16, 34);
       log('Escena creada');
 
-      // Todo lo "físico" del sistema (tanques, tuberías, peces...) vive
-      // aquí — separado de luces/suelo — para poder calcular un
-      // bounding box real y encuadrar la cámara automáticamente.
       systemRoot = new THREE.Group();
       systemRoot.name = 'systemRoot';
       scene.add(systemRoot);
@@ -118,11 +127,8 @@ Aqua.Three = (function () {
       controls.update();
       log('OrbitControls listos (clic izq. rotar, rueda zoom, clic der. desplazar)');
 
-      // ResizeObserver: mide el tamaño REAL del contenedor cuando el
-      // navegador termine de resolver el layout (aspect-ratio, fuentes,
-      // etc.), en vez de confiar en una sola lectura síncrona que podría
-      // devolver 0 en este instante. También cubre cualquier cambio de
-      // tamaño posterior (rotar el celular, redimensionar la ventana).
+      bindPicking();
+
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const cw = Math.round(entry.contentRect.width);
@@ -131,7 +137,6 @@ Aqua.Three = (function () {
         }
       });
       resizeObserver.observe(container);
-      // respaldo por si ResizeObserver no dispara en algún navegador viejo
       window.addEventListener('resize', () => {
         const { w, h } = getContainerSize();
         if (w > 0 && h > 0) applySize(w, h);
@@ -151,12 +156,42 @@ Aqua.Three = (function () {
     }
   }
 
+  function bindPicking() {
+    if (!renderer || !renderer.domElement) return;
+    const el = renderer.domElement;
+    el.addEventListener('pointerdown', (e) => {
+      pointerDown = { x: e.clientX, y: e.clientY };
+    });
+    el.addEventListener('pointerup', (e) => {
+      if (!pointerDown) return;
+      const dx = e.clientX - pointerDown.x;
+      const dy = e.clientY - pointerDown.y;
+      pointerDown = null;
+      if (Math.hypot(dx, dy) > 8) return;
+      const picked = pickSelectable(e.clientX, e.clientY);
+      if (picked) focusObject(picked);
+      else clearSelection();
+    });
+  }
+
+  function pickSelectable(clientX, clientY) {
+    if (!renderer || !camera || !systemRoot) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointerNdc, camera);
+    const hits = raycaster.intersectObjects(systemRoot.children, true);
+    for (const hit of hits) {
+      const selectable = findSelectableAncestor(hit.object);
+      if (selectable) return selectable;
+    }
+    return null;
+  }
+
   function getContainerSize() {
     const w = container.clientWidth;
     const h = container.clientHeight;
-    // valor de respaldo razonable para el primerísimo frame, por si el
-    // layout todavía no está resuelto — ResizeObserver lo corrige apenas
-    // el navegador termine de calcular el tamaño real.
     return { w: w > 0 ? w : 800, h: h > 0 ? h : 450 };
   }
 
@@ -178,27 +213,58 @@ Aqua.Three = (function () {
     if (labelRenderer) labelRenderer.render(scene, camera);
   }
 
-  /**
-   * Calcula el THREE.Box3 real de `systemRoot` (todo lo físico del
-   * sistema, sin luces ni suelo) y mueve la cámara para que quede
-   * completo dentro de campo de visión — nada de posiciones fijas a
-   * mano. La usa tanto el arranque inicial como el botón "Centrar vista".
-   */
-  function frameAll(paddingFactor = 1.18) {
-    if (!systemRoot || !camera || !controls) return;
-
-    // Sólo las mallas físicas participan en el encuadre. Se excluyen recursivamente
-    // Points/Sprites (por ejemplo las microalgas ocultas inicialmente en Y=-50),
-    // porque de otro modo el bounding box queda enorme y la cámara arranca mirando
-    // fuera del sistema.
+  function computeBoxFor(object3d) {
     const box = new THREE.Box3();
-    systemRoot.updateMatrixWorld(true);
-    systemRoot.traverse((obj) => {
+    object3d.updateMatrixWorld(true);
+    object3d.traverse((obj) => {
       if (!obj || !obj.visible || !obj.isMesh || !obj.geometry) return;
       const meshBox = new THREE.Box3().setFromObject(obj);
       if (!meshBox.isEmpty()) box.union(meshBox);
     });
+    return box;
+  }
 
+  function frameObject(object3d, paddingFactor = 1.45) {
+    if (!object3d || !camera || !controls) return;
+    const box = computeBoxFor(object3d);
+    if (box.isEmpty()) return frameAll();
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.4);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * Math.max(camera.aspect, 0.1));
+    const distV = (size.y * 0.5) / Math.tan(vFov / 2);
+    const distH = (size.x * 0.5) / Math.tan(hFov / 2);
+    const distD = size.z * 1.2;
+    let distance = Math.max(distV, distH, distD, maxDim * 1.15) * paddingFactor;
+    distance = Math.max(2.6, Math.min(distance, 16));
+
+    const dir = new THREE.Vector3(0.88, 0.38, 0.78).normalize();
+    camera.position.copy(center).addScaledVector(dir, distance);
+    camera.near = 0.05;
+    camera.far = 500;
+    camera.updateProjectionMatrix();
+
+    const visualCenter = center.clone();
+    visualCenter.y += Math.max(0.08, size.y * 0.04);
+    controls.target.copy(visualCenter);
+    controls.minDistance = Math.max(1.2, maxDim * 0.45);
+    controls.maxDistance = 100;
+    camera.lookAt(visualCenter);
+    controls.update();
+  }
+
+  function focusObject(object3d) {
+    selectedObject = object3d;
+    if (window.Aqua && Aqua.Labels && Aqua.Labels.showOnly) {
+      Aqua.Labels.showOnly(object3d.userData && object3d.userData.aquaDeviceId);
+    }
+  }
+
+  function frameAll(paddingFactor = 1.18) {
+    if (!systemRoot || !camera || !controls) return;
+    const box = computeBoxFor(systemRoot);
     if (box.isEmpty()) {
       box.min.set(-7.4, -0.2, -3.1);
       box.max.set(8.0, 4.1, 3.8);
@@ -232,10 +298,20 @@ Aqua.Three = (function () {
     log('frameAll(): cámara encuadrada', { center: center.toArray().map((n) => n.toFixed(2)), size: size.toArray().map((n) => n.toFixed(2)), distance: distance.toFixed(2) });
   }
 
+  function clearSelection(options = {}) {
+    selectedObject = null;
+    if (window.Aqua && Aqua.Labels && Aqua.Labels.hideAll) Aqua.Labels.hideAll();
+    if (options.restoreFrame) frameAll();
+  }
+
   return {
     init,
     registerUpdate,
+    registerSelectable,
     frameAll,
+    frameObject,
+    clearSelection,
+    getSelectedObject: () => selectedObject,
     getScene: () => scene,
     getSystemRoot: () => systemRoot,
     getCamera: () => camera,
