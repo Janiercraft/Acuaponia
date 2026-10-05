@@ -80,101 +80,49 @@ class AquaOrbitControls {
 
 
 /* ===== layout.js ===== */
-/* =========================================================================
-   modules/three/layout.js
-   Posiciones y tamaños de cada componente en la escena 3D, en un solo
-   lugar. Todos los demás módulos (tanques, tuberías, partículas, labels)
-   importan estas constantes en vez de repetir números sueltos — así la
-   distribución espacial (sección 18 del brief: nada en el mismo plano Z)
-   queda centralizada y es fácil de ajustar sin tocar media docena de
-   archivos.
-
-   Unidades: metros aproximados. Y = arriba. El suelo está en y = 0.
-   ========================================================================= */
-
-const FLOOR_SIZE = { width: 16, depth: 11 };
-
+const CONFIG = window.AquaModelConfig || {};
+const c = CONFIG;
+const fishW = Number(c.tankWidth) || 2.3, fishH = Number(c.tankHeight) || 2.0, fishD = Number(c.tankLength) || 2.3;
+const fishLeft = -7.0;
+const fishX = fishLeft + fishW / 2;
+const filterX = fishX + fishW / 2 + 1.45;
+const bioX = filterX + 1.9;
+const growStart = bioX + 1.65;
+const rows = Math.max(1, Math.round(Number(c.plantRows) || 3));
+const plantCount = Math.max(1, Math.round(Number(c.plantCount) || 18));
+const holesPerRow = Math.ceil(plantCount / rows);
+const requestedGrowLength = Number(c.growLength) || 4.2;
+const autoGrowLength = 0.52 * holesPerRow + 0.55;
+const growLength = c.adaptiveLayout === false ? requestedGrowLength : Math.max(requestedGrowLength, autoGrowLength);
+const zRows = Array.from({length: rows}, (_, i) => -0.15 - i * Math.max(0.52, (Number(c.growWidth)||0.44) * 1.45));
+const pbrW = Number(c.pbrWidth) || 1.0, pbrD = Number(c.pbrLength) || 1.0, pbrH = Number(c.pbrHeight) || 2.0;
+const pbrBaseDiameter = Math.min(pbrW, pbrD);
+const pbrX = growStart + growLength + 1.35 + pbrW / 2;
+// La bomba de aire/CO2 escala con el tamaño tridimensional del PBR.
+// La raíz cúbica evita que crezca de forma exagerada si sólo una dimensión es grande.
+const pbrRelativeVolume = Math.max(0.05, (pbrW * pbrD * pbrH) / 2.0);
+const co2Scale = Math.min(2.8, Math.max(0.75, Math.cbrt(pbrRelativeVolume)));
+const co2Size = { w: 0.55 * co2Scale, h: 0.60 * co2Scale, d: 0.50 * co2Scale };
+const CO2_PBR_GAP = 0.32 + 0.08 * co2Scale;
+const co2X = pbrX + pbrW / 2 + CO2_PBR_GAP + co2Size.w / 2;
+// Separación visual entre el fotobiorreactor y la bomba/depósito.
+const sumpW = 1.5;
+const PBR_SUMP_GAP = 1.35;
+const sumpX = pbrX + pbrW / 2 + PBR_SUMP_GAP + sumpW / 2;
+const FLOOR_SIZE = { width: Math.max(16, Math.max(co2X + co2Size.w / 2, sumpX + sumpW / 2) - fishLeft + 2.2), depth: Math.max(11, rows * 0.7 + 7) };
 const LAYOUT = {
-  fishTank: {
-    center: { x: -5.6, y: 0, z: 1.7 },
-    size: { w: 2.3, h: 2.0, d: 2.3 },
-  },
-  mechanicalFilter: {
-    center: { x: -2.7, y: 0, z: 2.1 },
-    radius: 0.55,
-    height: 1.8,
-  },
-  biofilter: {
-    center: { x: -0.8, y: 0, z: 1.7 },
-    radius: 0.55,
-    height: 1.8,
-  },
-  growBed: {
-    // tres canales horizontales, uno detrás de otro en Z (además de en X),
-    // elevados sobre patas — así se distinguen claramente al rotar la cámara.
-    xStart: 1.5,
-    xEnd: 5.7,
-    zRows: [-0.2, -0.9, -1.6],
-    tubeRadius: 0.22,
-    tubeY: 1.55,
-    holesPerRow: 6,
-  },
-  photobioreactor: {
-    center: { x: 6.0, y: 0, z: -1.1 },
-    radius: 0.5,
-    height: 2.0,
-    baseHeight: 0.18,
-  },
-  co2Pump: {
-    center: { x: 7.15, y: 0, z: -1.1 },
-    size: { w: 0.55, h: 0.6, d: 0.5 },
-  },
-  sump: {
-    center: { x: 6.0, y: 0, z: 2.2 },
-    size: { w: 1.5, h: 1.5, d: 1.5 },
-  },
+  fishTank:{center:{x:fishX,y:0,z:1.7},size:{w:fishW,h:fishH,d:fishD}},
+  mechanicalFilter:{center:{x:filterX,y:0,z:2.1},radius:.55,height:1.8},
+  biofilter:{center:{x:bioX,y:0,z:1.7},radius:.55,height:1.8},
+  growBed:{xStart:growStart,xEnd:growStart+growLength,zRows,tubeRadius:(Number(c.growWidth)||.44)/2,tubeY:Number(c.growHeight)||1.55,holesPerRow,plantCount},
+  photobioreactor:{center:{x:pbrX,y:0,z:-1.1},radius:pbrBaseDiameter/2,width:pbrW,depth:pbrD,scaleX:pbrW/pbrBaseDiameter,scaleZ:pbrD/pbrBaseDiameter,height:pbrH,baseHeight:Math.max(.12,pbrH*.09)},
+  co2Pump:{center:{x:co2X,y:0,z:-1.1},size:co2Size},
+  sump:{center:{x:sumpX,y:0,z:2.2},size:{w:sumpW,h:1.5,d:1.5}}
 };
-
-// Puntos de conexión ("puertos") usados por pipes.js para trazar las
-// curvas — calculados a partir del layout de arriba en vez de escritos a
-// mano, para que si algún tamaño cambia, las tuberías seco-recalculen solas.
-function computePorts() {
-  const ft = LAYOUT.fishTank;
-  const mf = LAYOUT.mechanicalFilter;
-  const bf = LAYOUT.biofilter;
-  const gb = LAYOUT.growBed;
-  const pbr = LAYOUT.photobioreactor;
-  const sump = LAYOUT.sump;
-
-  return {
-    // salida inferior: conectada directamente al vértice más bajo del fondo cónico
-    fishOutlet: { x: ft.center.x, y: ft.center.y + 0.06, z: ft.center.z },
-    fishInlet: { x: ft.center.x, y: ft.center.y + ft.size.h * 0.75, z: ft.center.z - ft.size.d / 2 },
-
-    filterIn: { x: mf.center.x - mf.radius, y: mf.center.y + mf.height * 0.55, z: mf.center.z },
-    filterOut: { x: mf.center.x + mf.radius, y: mf.center.y + mf.height * 0.55, z: mf.center.z },
-
-    bioIn: { x: bf.center.x - bf.radius, y: bf.center.y + bf.height * 0.55, z: bf.center.z },
-    bioOut: { x: bf.center.x + bf.radius, y: bf.center.y + bf.height * 0.55, z: bf.center.z },
-
-    // bifurcación: justo después del biofiltro, antes de subir al cultivo
-    bifurcation: { x: bf.center.x + bf.radius + 0.6, y: bf.height * 0.55, z: bf.center.z },
-
-    growBedIn: { x: gb.xStart, y: gb.tubeY, z: gb.zRows[1] },
-    growBedOut: { x: gb.xEnd, y: gb.tubeY, z: gb.zRows[1] },
-
-    pbrIn: { x: pbr.center.x, y: pbr.baseHeight + pbr.height * 0.82, z: pbr.center.z - pbr.radius },
-    pbrOut: { x: pbr.center.x, y: pbr.baseHeight + 0.12, z: pbr.center.z - pbr.radius },
-
-    // convergencia: donde ambas ramas (cultivo y PBR) vuelven a unirse
-    converge: { x: sump.center.x - sump.size.w / 2 - 0.6, y: sump.center.y + sump.size.h * 0.55, z: sump.center.z },
-
-    sumpIn: { x: sump.center.x - sump.size.w / 2, y: sump.center.y + sump.size.h * 0.55, z: sump.center.z },
-    sumpOut: { x: sump.center.x, y: sump.center.y + sump.size.h + 0.05, z: sump.center.z },
-
-    co2PumpTop: { x: LAYOUT.co2Pump.center.x, y: LAYOUT.co2Pump.size.h, z: LAYOUT.co2Pump.center.z },
-    diffuser: { x: pbr.center.x, y: pbr.baseHeight + 0.1, z: pbr.center.z },
-  };
+function computePorts(){
+ const ft=LAYOUT.fishTank,mf=LAYOUT.mechanicalFilter,bf=LAYOUT.biofilter,gb=LAYOUT.growBed,pbr=LAYOUT.photobioreactor,sump=LAYOUT.sump;
+ const midZ=gb.zRows[Math.floor(gb.zRows.length/2)];
+ return {fishOutlet:{x:ft.center.x,y:ft.center.y+.06,z:ft.center.z},fishInlet:{x:ft.center.x,y:ft.center.y+ft.size.h*.75,z:ft.center.z-ft.size.d/2},filterIn:{x:mf.center.x-mf.radius,y:mf.center.y+mf.height*.55,z:mf.center.z},filterOut:{x:mf.center.x+mf.radius,y:mf.center.y+mf.height*.55,z:mf.center.z},bioIn:{x:bf.center.x-bf.radius,y:bf.center.y+bf.height*.55,z:bf.center.z},bioOut:{x:bf.center.x+bf.radius,y:bf.center.y+bf.height*.55,z:bf.center.z},bifurcation:{x:bf.center.x+bf.radius+.6,y:bf.height*.55,z:bf.center.z},growBedIn:{x:gb.xStart,y:gb.tubeY,z:midZ},growBedOut:{x:gb.xEnd,y:gb.tubeY,z:midZ},pbrIn:{x:pbr.center.x-pbr.width*.22,y:pbr.baseHeight+pbr.height*.82,z:pbr.center.z-pbr.depth/2},pbrOut:{x:pbr.center.x+pbr.width*.22,y:pbr.baseHeight+.12,z:pbr.center.z-pbr.depth/2},converge:{x:sump.center.x-sump.size.w/2-.6,y:sump.center.y+sump.size.h*.55,z:sump.center.z},sumpIn:{x:sump.center.x-sump.size.w/2,y:sump.center.y+sump.size.h*.55,z:sump.center.z},sumpOut:{x:sump.center.x,y:sump.center.y+sump.size.h+.05,z:sump.center.z},co2PumpTop:{x:LAYOUT.co2Pump.center.x,y:LAYOUT.co2Pump.size.h,z:LAYOUT.co2Pump.center.z},diffuser:{x:pbr.center.x,y:pbr.baseHeight+.1,z:pbr.center.z}};
 }
 
 /* ===== materials.js ===== */
@@ -545,22 +493,25 @@ Aqua.Environment = (function () {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x15211f, roughness: 0.95, metalness: 0.05 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0.5, 0, 0.2);
+    const leftEdge = LAYOUT.fishTank.center.x - LAYOUT.fishTank.size.w / 2;
+    const rightEdge = LAYOUT.co2Pump.center.x + LAYOUT.co2Pump.size.w / 2;
+    const floorCenterX = (leftEdge + rightEdge) / 2;
+    floor.position.set(floorCenterX, 0, 0.2);
     floor.receiveShadow = true;
     scene.add(floor);
 
     // Rejilla tenue sobre el suelo: referencia de escala sin distraer.
     const grid = new THREE.GridHelper(Math.max(FLOOR_SIZE.width, FLOOR_SIZE.depth), 20, 0x2b423e, 0x1c2b29);
-    grid.position.set(0.5, 0.01, 0.2);
+    grid.position.set(floorCenterX, 0.01, 0.2);
     scene.add(grid);
 
     // Plataforma clara bajo la instalación. Además de mejorar la lectura visual,
     // sirve como referencia inmediata de que WebGL está renderizando correctamente.
     const pad = new THREE.Mesh(
-      new THREE.BoxGeometry(15.2, 0.12, 10.2),
+      new THREE.BoxGeometry(FLOOR_SIZE.width * 0.95, 0.12, FLOOR_SIZE.depth * 0.93),
       new THREE.MeshStandardMaterial({ color: 0x243633, roughness: 0.92, metalness: 0.02 })
     );
-    pad.position.set(0.5, -0.07, 0.2);
+    pad.position.set(floorCenterX, -0.07, 0.2);
     pad.receiveShadow = true;
     scene.add(pad);
   }
@@ -633,23 +584,45 @@ Aqua.Pipes = (function () {
       P.growBedIn,
     ], 0.05, waterPipe);
     makeCurve('throughPlants', [P.growBedIn, P.growBedOut], 0.05, waterPipe);
+    // Retorno de plantas: rodea automáticamente el PBR en vez de atravesarlo.
+    const pbr = LAYOUT.photobioreactor;
+    const pbrLeft = pbr.center.x - pbr.width / 2;
+    const pbrRight = pbr.center.x + pbr.width / 2;
+    const bypassClearance = Math.max(0.42, LAYOUT.growBed.tubeRadius * 2.2);
+    const bypassZ = pbr.center.z - pbr.depth / 2 - bypassClearance;
+    const approachX = Math.max(P.growBedOut.x + 0.22, pbrLeft - 0.42);
+    const exitX = pbrRight + 0.48;
     makeCurve('plantsToConverge', [
       P.growBedOut,
-      { x: P.converge.x, y: P.growBedOut.y, z: P.growBedOut.z },
+      { x: approachX, y: P.growBedOut.y, z: P.growBedOut.z },
+      { x: approachX, y: P.growBedOut.y, z: bypassZ },
+      { x: exitX, y: P.growBedOut.y, z: bypassZ },
+      { x: exitX, y: P.converge.y + 0.18, z: P.converge.z },
       P.converge,
     ], 0.05, waterPipe);
 
-    // --- rama del fotobiorreactor: bifurcación -> baja -> atraviesa el PBR -> convergencia ---
+    // --- rama del fotobiorreactor: se aproxima por el lateral/frente del PBR
+    //     y sale rodeándolo, evitando que las tuberías externas lo atraviesen visualmente. ---
+    const pbrFrontZ = LAYOUT.photobioreactor.center.z - (LAYOUT.photobioreactor.depth || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrLeftX = LAYOUT.photobioreactor.center.x - (LAYOUT.photobioreactor.width || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrRightX = LAYOUT.photobioreactor.center.x + (LAYOUT.photobioreactor.width || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrBypass = 0.28;
+    const approachFrontZ = pbrFrontZ - 0.26;
+    const leftBypassX = pbrLeftX - pbrBypass;
+    const rightBypassX = pbrRightX + pbrBypass;
     makeCurve('bifurcationToPBR', [
       P.bifurcation,
-      { x: LAYOUT.photobioreactor.center.x - 1.2, y: 0.5, z: P.bifurcation.z },
-      { x: LAYOUT.photobioreactor.center.x, y: 0.5, z: LAYOUT.photobioreactor.center.z - LAYOUT.photobioreactor.radius - 0.3 },
+      { x: leftBypassX - 0.55, y: 0.54, z: P.bifurcation.z },
+      { x: leftBypassX, y: 0.54, z: approachFrontZ },
+      { x: P.pbrIn.x, y: P.pbrIn.y - 0.18, z: approachFrontZ },
       P.pbrIn,
     ], 0.045, waterPipe);
     makeCurve('throughPBR', [P.pbrIn, P.pbrOut], 0.035, waterPipe);
     makeCurve('pbrToConverge', [
       P.pbrOut,
-      { x: LAYOUT.photobioreactor.center.x, y: 0.35, z: P.converge.z },
+      { x: P.pbrOut.x, y: Math.max(0.34, P.pbrOut.y), z: approachFrontZ },
+      { x: rightBypassX, y: 0.36, z: approachFrontZ },
+      { x: rightBypassX + 0.2, y: P.converge.y + 0.14, z: P.converge.z },
       P.converge,
     ], 0.045, waterPipe);
 
@@ -728,7 +701,7 @@ Aqua.FishTank = (function () {
   let frameGroup = null;
   const size = LAYOUT.fishTank.size;
   const center = LAYOUT.fishTank.center;
-  const FUNNEL_H = 0.50;
+  const FUNNEL_H = Math.min(0.50, size.h * 0.28);
   const BODY_H = size.h - FUNNEL_H;
   const FUNNEL_TOP_R = Math.min(size.w, size.d) * 0.46;
   const FUNNEL_BOTTOM_R = 0.12;
@@ -856,7 +829,7 @@ window.Aqua = window.Aqua || {};
 
 Aqua.Fish = (function () {
 
-  const FISH_COUNT = 3;
+  const FISH_COUNT = Math.max(1, Math.round(Number((window.AquaModelConfig || {}).fishCount) || 3));
   let fishList = []; // { group, target, speed, sluggishFactor }
   let bounds = null;
 
@@ -1182,6 +1155,7 @@ Aqua.Plants = (function () {
       root.add(buildLeg(gb.xStart + 0.15, z));
       root.add(buildLeg(gb.xEnd - 0.15, z));
       for (let i = 0; i < gb.holesPerRow; i++) {
+        if (plants.length >= gb.plantCount) break;
         const t = (i + 0.5) / gb.holesPerRow;
         const x = THREE.MathUtils.lerp(gb.xStart + 0.2, gb.xEnd - 0.2, t);
         const plant = buildPlant();
@@ -1508,6 +1482,7 @@ Aqua.Photobioreactor = (function () {
     const scene = Aqua.Three.getSystemRoot(); // meshes "físicos": entran al bounding box de frameAll()
     const group = new THREE.Group();
     group.position.set(L.center.x, 0, L.center.z);
+    group.scale.set(L.scaleX || 1, 1, L.scaleZ || 1);
 
     buildReactorBody(group);
     buildLed(group);
@@ -1634,6 +1609,7 @@ Aqua.Co2System = (function () {
   function init() {
     const scene = Aqua.Three.getSystemRoot(); // meshes "físicos": entran al bounding box de frameAll()
     const L = LAYOUT.co2Pump;
+    const detailScale = Math.max(0.75, Math.min(2.8, L.size.h / 0.60));
 
     const group = new THREE.Group();
     group.position.set(L.center.x, 0, L.center.z);
@@ -1646,20 +1622,20 @@ Aqua.Co2System = (function () {
     group.add(body);
 
     // patas cortas
-    const legGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.12, 8);
+    const legGeo = new THREE.CylinderGeometry(0.025 * detailScale, 0.025 * detailScale, 0.12 * detailScale, 8);
     const legMat = Aqua.Materials.metal(0x4d5c58, 0.4);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
       const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(sx * (L.size.w / 2 - 0.06), 0.06, sz * (L.size.d / 2 - 0.06));
+      leg.position.set(sx * (L.size.w / 2 - 0.06 * detailScale), 0.06 * detailScale, sz * (L.size.d / 2 - 0.06 * detailScale));
       leg.castShadow = true;
       group.add(leg);
     });
 
     // detalle de ventilación: aro + aspas simples
-    const ventRing = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.012, 8, 20), Aqua.Materials.metal(0x74c2bc, 0.3));
-    ventRing.position.set(0, L.size.h / 2 + 0.06, L.size.d / 2 + 0.01);
+    const ventRing = new THREE.Mesh(new THREE.TorusGeometry(0.09 * detailScale, 0.012 * detailScale, 8, 20), Aqua.Materials.metal(0x74c2bc, 0.3));
+    ventRing.position.set(0, L.size.h / 2 + 0.06, L.size.d / 2 + 0.01 * detailScale);
     group.add(ventRing);
-    const crossGeo = new THREE.BoxGeometry(0.16, 0.016, 0.016);
+    const crossGeo = new THREE.BoxGeometry(0.16 * detailScale, 0.016 * detailScale, 0.016 * detailScale);
     const cross1 = new THREE.Mesh(crossGeo, Aqua.Materials.metal(0x74c2bc, 0.3));
     cross1.position.copy(ventRing.position);
     group.add(cross1);
@@ -1668,9 +1644,9 @@ Aqua.Co2System = (function () {
     group.add(cross2);
 
     // boquilla de salida (donde arranca la manguera)
-    const nozzleGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.06, 8);
+    const nozzleGeo = new THREE.CylinderGeometry(0.02 * detailScale, 0.02 * detailScale, 0.06 * detailScale, 8);
     const nozzle = new THREE.Mesh(nozzleGeo, Aqua.Materials.metal(0x4d5c58, 0.4));
-    nozzle.position.set(0, L.size.h + 0.09, 0);
+    nozzle.position.set(0, L.size.h + 0.09 * detailScale, 0);
     group.add(nozzle);
 
     scene.add(group);
@@ -1679,14 +1655,14 @@ Aqua.Co2System = (function () {
     // manguera: bomba -> sube -> entra por arriba del reactor -> baja
     // hasta el difusor. Curva independiente de las tuberías de agua.
     const P = computePorts();
-    const pumpTop = { x: L.center.x, y: L.size.h + 0.12, z: L.center.z };
+    const pumpTop = { x: L.center.x, y: L.size.h + 0.12 * detailScale, z: L.center.z };
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(pumpTop.x, pumpTop.y, pumpTop.z),
       new THREE.Vector3(pumpTop.x, P.pbrIn.y + 0.15, pumpTop.z),
       new THREE.Vector3(P.diffuser.x, P.pbrIn.y + 0.1, P.diffuser.z),
       new THREE.Vector3(P.diffuser.x, P.diffuser.y + 0.05, P.diffuser.z),
     ]);
-    const hoseGeo = new THREE.TubeGeometry(curve, 40, 0.014, 8, false);
+    const hoseGeo = new THREE.TubeGeometry(curve, 40, 0.014 * Math.min(1.8, detailScale), 8, false);
     const hoseMat = new THREE.MeshStandardMaterial({ color: 0x647975, roughness: 0.7 });
     const hose = new THREE.Mesh(hoseGeo, hoseMat);
     hose.castShadow = true;
@@ -1868,7 +1844,7 @@ Aqua.Nutrients = (function () {
   function update(dt, speed, flowing, emissionModifiers) {
     emissionModifiers = emissionModifiers || {};
     const wasteInterval = 0.95 / Math.max(0.3, (emissionModifiers.wasteRate || 1));
-    const nutrientInterval = 0.80;
+    const nutrientInterval = 0.80 / Math.max(0.3, (emissionModifiers.nutrientRate || 1));
     const waterInterval = 0.20;
 
     // Al pulsar Iniciar generamos trazadores INMEDIATAMENTE. Así el usuario

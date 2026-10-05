@@ -20,6 +20,76 @@ window.Aqua = window.Aqua || {};
 
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
 
+  const MODEL_DEFAULTS = window.AQUA_MODEL_DEFAULTS || {
+    tankWidth: 2.3, tankHeight: 2.0, tankLength: 2.3,
+    fishCount: 3, fishAvgWeightKg: 0.35, feedPerFishGDay: 8, feedProteinPct: 32,
+    plantCount: 18, plantRows: 3, growLength: 4.2, growWidth: 0.44, growHeight: 1.55, adaptiveLayout: true,
+    pbrWidth: 1.0, pbrHeight: 2.0, pbrLength: 1.0, circulationFlowLh: 900
+  };
+  const modelConfig = Object.assign({}, MODEL_DEFAULTS, window.AquaModelConfig || {});
+  Aqua.modelConfig = modelConfig;
+
+  function effectiveGrowLength(cfg = modelConfig) {
+    const rows = Math.max(1, Math.round(cfg.plantRows));
+    const perRow = Math.ceil(Math.max(1, cfg.plantCount) / rows);
+    const autoLength = 0.52 * perRow + 0.55;
+    return cfg.adaptiveLayout ? Math.max(cfg.growLength, autoLength) : cfg.growLength;
+  }
+
+  function computeTankVolumeLiters(cfg = modelConfig) {
+    // El fondo se aproxima como un tronco de pirámide hacia el desagüe central.
+    const coneH = Math.min(0.5, cfg.tankHeight * 0.28);
+    const bodyH = Math.max(0.1, cfg.tankHeight - coneH);
+    const topArea = cfg.tankWidth * cfg.tankLength;
+    const outletArea = 0.14 * 0.14;
+    const funnelM3 = (coneH / 3) * (topArea + Math.sqrt(topArea * outletArea) + outletArea);
+    const grossM3 = topArea * bodyH + funnelM3;
+    return grossM3 * 1000 * 0.82; // nivel operativo aproximado 82 %
+  }
+
+  function computeQuantitativeModel() {
+    const c = modelConfig;
+    const tankVolumeL = Math.max(1, computeTankVolumeLiters(c));
+    const fishBiomassKg = c.fishCount * c.fishAvgWeightKg;
+    const feedGDay = c.fishCount * c.feedPerFishGDay;
+    const solidWasteGDay = feedGDay * 0.28;
+    const feedNitrogenGDay = feedGDay * (c.feedProteinPct / 100) * 0.16;
+    const tanProducedGDay = feedNitrogenGDay * 0.35;
+    const turnoversPerHour = c.circulationFlowLh / tankVolumeL;
+    const flowEfficiency = clamp(turnoversPerHour / 1.0, 0.18, 1);
+    const oxygenEfficiency = clamp((state.sensors.oxygen - 2.0) / 5.0, 0.15, 1);
+    const faultEfficiency = state.faults.filterClogged ? 0.48 : 1;
+    const pumpEfficiency = isFlowing() ? 1 : 0.12;
+    const nitrificationEfficiency = clamp(0.88 * flowEfficiency * oxygenEfficiency * faultEfficiency * pumpEfficiency, 0.03, 0.92);
+    const nitrateProducedGDay = tanProducedGDay * nitrificationEfficiency * (62 / 14);
+    const plantFraction = state.flowSplit / 100;
+    const pbrFraction = 1 - plantFraction;
+    const nitratePlantsGDay = nitrateProducedGDay * plantFraction;
+    const nitratePbrGDay = state.photobioreactor.active ? nitrateProducedGDay * pbrFraction : 0;
+    const nitratePerPlantGDay = nitratePlantsGDay / Math.max(1, c.plantCount);
+    const plantNutrientAdequacy = clamp(nitratePerPlantGDay / 0.35, 0, 1.15);
+    const plantFlowAdequacy = clamp((c.circulationFlowLh * plantFraction) / Math.max(80, c.plantCount * 18), 0.15, 1);
+    const plantProductivityGDay = c.plantCount * 8.0 * Math.min(1, plantNutrientAdequacy) * plantFlowAdequacy;
+    const pbrVolumeL = c.pbrWidth * c.pbrHeight * c.pbrLength * 1000 * 0.80;
+    const pbrNutrientNeed = Math.max(0.001, pbrVolumeL * 0.0045);
+    const pbrNutrientAdequacy = clamp(nitratePbrGDay / pbrNutrientNeed, 0, 1.2);
+    const pbrFlowAdequacy = clamp((c.circulationFlowLh * pbrFraction) / Math.max(50, pbrVolumeL * 0.15), 0.08, 1);
+    const pbrLightFactor = state.photobioreactor.light ? 1 : 0.12;
+    const pbrProductivityGDay = pbrVolumeL * 0.05 * Math.min(1, pbrNutrientAdequacy) * pbrFlowAdequacy * pbrLightFactor * (state.photobioreactor.active ? 1 : 0);
+    const growLen = effectiveGrowLength(c);
+    const growVolumeL = Math.PI * Math.pow(c.growWidth / 2, 2) * growLen * Math.max(1, c.plantRows) * 1000;
+    const stockingDensityKgM3 = fishBiomassKg / (tankVolumeL / 1000);
+    return {
+      tankVolumeL, fishBiomassKg, feedGDay, solidWasteGDay, feedNitrogenGDay, tanProducedGDay,
+      turnoversPerHour, flowEfficiency, oxygenEfficiency, nitrificationEfficiency, nitrateProducedGDay,
+      nitratePlantsGDay, nitratePbrGDay, nitratePerPlantGDay, plantNutrientAdequacy, plantFlowAdequacy, plantProductivityGDay,
+      pbrVolumeL, pbrNutrientAdequacy, pbrFlowAdequacy, pbrProductivityGDay,
+      growLen, growVolumeL, stockingDensityKgM3
+    };
+  }
+
+  Aqua.computeQuantitativeModel = computeQuantitativeModel;
+
   /* ---------------------------------------------------------------------
      ESTADO CENTRAL
      --------------------------------------------------------------------- */
@@ -40,6 +110,7 @@ window.Aqua = window.Aqua || {};
       history,
       alertLog: [],
       _prevAlertSet: new Set(),
+      quantitative: null,
       _sensorTickAcc: 0,
     };
   }
@@ -70,24 +141,34 @@ window.Aqua = window.Aqua || {};
     const flowing = isFlowing();
     const noise = () => (Math.random() - 0.5);
 
-    // --- amoníaco: sube si no hay flujo/filtración, o si se fuerza la falla ---
-    let ammoniaTarget = 0.10;
-    if (!flowing) ammoniaTarget += 0.55;
-    if (f.filterClogged) ammoniaTarget += 0.30;
+    // --- balance cuantitativo de nutrientes ---
+    const q = computeQuantitativeModel();
+    state.quantitative = q;
+    const loadingTanMgLDay = (q.tanProducedGDay * 1000) / Math.max(1, q.tankVolumeL);
+    const unconvertedTan = 1 - q.nitrificationEfficiency;
+
+    // Amoníaco: depende directamente de peces/alimento/volumen y de la
+    // capacidad de convertir TAN en el biofiltro.
+    let ammoniaTarget = 0.04 + loadingTanMgLDay * (0.45 + 2.2 * unconvertedTan);
+    if (!flowing) ammoniaTarget += 0.45;
+    if (f.filterClogged) ammoniaTarget += 0.24;
     if (f.highAmmonia) ammoniaTarget = Math.max(ammoniaTarget, 0.95);
-    s.ammonia = clamp(s.ammonia + (ammoniaTarget - s.ammonia) * 0.14 * dtSim + noise() * 0.004, 0, 3);
+    s.ammonia = clamp(s.ammonia + (ammoniaTarget - s.ammonia) * 0.14 * dtSim + noise() * 0.004, 0, 5);
 
-    // --- nitrito: sube cuando el biofiltro está sobrecargado ---
-    let nitriteTarget = 0.05;
-    if (f.highAmmonia) nitriteTarget += 0.35;
-    if (!flowing) nitriteTarget += 0.15;
-    s.nitrite = clamp(s.nitrite + (nitriteTarget - s.nitrite) * 0.10 * dtSim + noise() * 0.003, 0, 3);
+    // Nitrito: aumenta cuando la nitrificación queda a medias.
+    let nitriteTarget = 0.025 + loadingTanMgLDay * unconvertedTan * 0.75;
+    if (!flowing) nitriteTarget += 0.12;
+    if (f.highAmmonia) nitriteTarget += 0.22;
+    s.nitrite = clamp(s.nitrite + (nitriteTarget - s.nitrite) * 0.11 * dtSim + noise() * 0.003, 0, 4);
 
-    // --- nitrato: nutriente principal para las plantas, se mantiene cerca
-    //     de la línea base cuando el sistema circula con normalidad ---
-    let nitrateTarget = flowing ? 30 : 22;
-    if (f.highAmmonia) nitrateTarget -= 6; // el biofiltro no está convirtiendo bien
-    s.nitrate = clamp(s.nitrate + (nitrateTarget - s.nitrate) * 0.05 * dtSim + noise() * 0.05, 0, 90);
+    // Nitrato: balance entre producción y consumo estimado de plantas/PBR.
+    const nitrateDemandGDay =
+      (q.plantProductivityGDay / 8 / Math.max(1, modelConfig.plantCount)) * Math.min(q.nitratePlantsGDay, modelConfig.plantCount * 0.35) +
+      Math.min(q.nitratePbrGDay, q.pbrVolumeL * 0.0045);
+    const netNitrateGDay = q.nitrateProducedGDay - nitrateDemandGDay;
+    let nitrateTarget = clamp(18 + (netNitrateGDay * 1000 / Math.max(1, q.tankVolumeL)) * 8, 3, 120);
+    if (!flowing) nitrateTarget *= 0.72;
+    s.nitrate = clamp(s.nitrate + (nitrateTarget - s.nitrate) * 0.055 * dtSim + noise() * 0.05, 0, 140);
 
     // --- pH ---
     const phTarget = f.highPh ? 8.6 : 6.8;
@@ -121,8 +202,10 @@ window.Aqua = window.Aqua || {};
 
     const lightFactor = pbr.active && pbr.light ? 1 : 0.12;
     const flowFactor = !pbr.active ? 0.05 : (!pbrHasFlow ? 0.08 : (pbrFlowPct < 15 ? 0.45 : 1));
-    const nutrientFactor = clamp(s.nitrate / 30, 0.35, 1.3);
-    const BASE_GROWTH_RATE = 0.05; // por segundo simulado, en condiciones óptimas
+    const qNow = state.quantitative || computeQuantitativeModel();
+    const nutrientFactor = clamp(qNow.pbrNutrientAdequacy, 0.08, 1.3);
+    const volumeScale = clamp(Math.pow(Math.max(50, qNow.pbrVolumeL) / 800, -0.12), 0.72, 1.25);
+    const BASE_GROWTH_RATE = 0.05 * volumeScale; // ajustada por volumen y disponibilidad real estimada
     const MAX_ALGAE_BIOMASS = 1;
 
     const r = BASE_GROWTH_RATE * lightFactor * flowFactor * nutrientFactor;
@@ -197,10 +280,35 @@ window.Aqua = window.Aqua || {};
   /* ---------------------------------------------------------------------
      RENDER — refleja el estado en el DOM / SVG
      --------------------------------------------------------------------- */
+  function renderQuantitative() {
+    const q = computeQuantitativeModel();
+    state.quantitative = q;
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const f1 = (v) => Number(v).toLocaleString('es-CO', { maximumFractionDigits: 1 });
+    const f2 = (v) => Number(v).toLocaleString('es-CO', { maximumFractionDigits: 2 });
+    set('qTankVolume', f1(q.tankVolumeL) + ' L');
+    set('qFishBiomass', f2(q.fishBiomassKg) + ' kg');
+    set('qFeedDay', f1(q.feedGDay) + ' g/día');
+    set('qSolidWaste', f1(q.solidWasteGDay) + ' g/día');
+    set('qTanProduced', f2(q.tanProducedGDay) + ' g N/día');
+    set('qNitrateProduced', f2(q.nitrateProducedGDay) + ' g/día');
+    set('qNitratePlants', f2(q.nitratePlantsGDay) + ' g/día');
+    set('qNitratePerPlant', f2(q.nitratePerPlantGDay) + ' g/planta/día');
+    set('qNitratePbr', f2(q.nitratePbrGDay) + ' g/día');
+    set('qPlantProductivity', f1(q.plantProductivityGDay) + ' g fresco/día');
+    set('qPbrVolume', f1(q.pbrVolumeL) + ' L');
+    set('qPbrProductivity', f1(q.pbrProductivityGDay) + ' g seco/día');
+    set('qStockingDensity', f2(q.stockingDensityKgM3) + ' kg/m³');
+    set('qTurnovers', f2(q.turnoversPerHour) + ' vol/h');
+    set('qEffectiveGrowLength', f2(q.growLen) + ' m');
+    set('qGrowVolume', f1(q.growVolumeL) + ' L');
+  }
+
   function renderAll() {
     const s = state.sensors, f = state.faults;
     const flowing = isFlowing();
     const bioOverloaded = f.highAmmonia || s.ammonia > 0.5;
+    renderQuantitative();
 
     // lectura rápida sobre el lienzo
     document.getElementById('qsTemp').textContent = s.temperature.toFixed(1) + ' °C';
@@ -291,8 +399,9 @@ window.Aqua = window.Aqua || {};
     const activeDt = state.running ? dt : 0;
     const flowing = isFlowing() && state.running;
 
-    // disponibilidad de nutrientes para el crecimiento de plantas (0..1)
-    const nutrientAvailability = clamp(state.sensors.nitrate / 35, 0, 1.4);
+    // disponibilidad de nutrientes por planta según el balance cuantitativo.
+    const qLoop = state.quantitative || computeQuantitativeModel();
+    const nutrientAvailability = clamp(qLoop.plantNutrientAdequacy, 0, 1.4);
 
     // Igual que en renderAll(): si el modelo 3D falló al iniciar, esto no
     // debe detener el bucle ni la simulación numérica — sólo se pierde
@@ -310,7 +419,7 @@ window.Aqua = window.Aqua || {};
         }
       };
       update3D('WaterFlow', () => Aqua.WaterFlow.update(activeDt, state.speed));
-      update3D('Nutrients', () => Aqua.Nutrients.update(activeDt, state.speed, flowing, { wasteRate: state.faults.filterClogged ? 1.4 : 1 }));
+      update3D('Nutrients', () => Aqua.Nutrients.update(activeDt, state.speed, flowing, { wasteRate: clamp((qLoop.feedGDay / 24) * (state.faults.filterClogged ? 1.4 : 1), 0.25, 5), nutrientRate: clamp(qLoop.nitrateProducedGDay / 1.8, 0.25, 5) }));
       update3D('Plants', () => Aqua.Plants.growthTick(activeDt, state.speed, flowing ? nutrientAvailability : 0));
       update3D('Fish', () => Aqua.Fish.update(activeDt * state.speed));
       update3D('Photobioreactor', () => Aqua.Photobioreactor.growthTick(activeDt * state.speed, state.photobioreactor.biomass, state.photobioreactor._flowIntensity));
@@ -451,6 +560,58 @@ window.Aqua = window.Aqua || {};
       safe3D(() => Aqua.Nutrients.setBranchRatio(state.flowSplit / 100));
       updateAlerts();
       renderAll();
+    });
+
+    // Panel paramétrico. Los cambios geométricos se guardan y la página
+    // se recarga para reconstruir todas las mallas y tuberías con el nuevo layout.
+    const modelPanel = document.getElementById('modelPanel');
+    const btnModelPanel = document.getElementById('btnModelPanel');
+    const modelFields = {
+      cfgTankWidth: 'tankWidth', cfgTankHeight: 'tankHeight', cfgTankLength: 'tankLength',
+      cfgFishCount: 'fishCount', cfgFishWeight: 'fishAvgWeightKg', cfgFeedPerFish: 'feedPerFishGDay', cfgFeedProtein: 'feedProteinPct',
+      cfgPlantCount: 'plantCount', cfgPlantRows: 'plantRows', cfgGrowLength: 'growLength', cfgGrowWidth: 'growWidth', cfgGrowHeight: 'growHeight',
+      cfgPbrWidth: 'pbrWidth', cfgPbrHeight: 'pbrHeight', cfgPbrLength: 'pbrLength', cfgFlowRate: 'circulationFlowLh'
+    };
+    function fillModelForm(cfg) {
+      Object.entries(modelFields).forEach(([id, key]) => { const el = document.getElementById(id); if (el) el.value = cfg[key]; });
+      document.getElementById('cfgAdaptiveLayout').checked = !!cfg.adaptiveLayout;
+    }
+    fillModelForm(modelConfig);
+    btnModelPanel.addEventListener('click', () => {
+      const show = modelPanel.classList.contains('hidden');
+      modelPanel.classList.toggle('hidden', !show);
+      btnModelPanel.setAttribute('aria-expanded', String(show));
+      if (show) renderQuantitative();
+    });
+    document.getElementById('modelForm').addEventListener('input', () => {
+      // Vista previa numérica sin reconstruir todavía la geometría.
+      const preview = Object.assign({}, modelConfig);
+      Object.entries(modelFields).forEach(([id, key]) => {
+        const el = document.getElementById(id); const v = parseFloat(el.value); if (Number.isFinite(v)) preview[key] = v;
+      });
+      preview.fishCount = Math.round(preview.fishCount); preview.plantCount = Math.round(preview.plantCount); preview.plantRows = Math.round(preview.plantRows);
+      preview.adaptiveLayout = document.getElementById('cfgAdaptiveLayout').checked;
+      Object.assign(modelConfig, preview);
+      const status = document.getElementById('quantStatus');
+      if (status) status.textContent = 'Cambios pendientes de aplicar';
+      renderQuantitative();
+    });
+    document.getElementById('modelForm').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const next = Object.assign({}, modelConfig);
+      Object.entries(modelFields).forEach(([id, key]) => {
+        const v = parseFloat(document.getElementById(id).value); if (Number.isFinite(v)) next[key] = v;
+      });
+      next.fishCount = clamp(Math.round(next.fishCount), 1, 80);
+      next.plantCount = clamp(Math.round(next.plantCount), 1, 100);
+      next.plantRows = clamp(Math.round(next.plantRows), 1, 6);
+      next.adaptiveLayout = document.getElementById('cfgAdaptiveLayout').checked;
+      localStorage.setItem('aquaModelConfig', JSON.stringify(next));
+      location.reload();
+    });
+    document.getElementById('btnResetModel').addEventListener('click', () => {
+      localStorage.removeItem('aquaModelConfig');
+      location.reload();
     });
 
     const faultPanel = document.getElementById('faultPanel');

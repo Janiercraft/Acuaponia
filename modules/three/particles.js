@@ -130,7 +130,7 @@ Aqua.Nutrients = (function () {
   function update(dt, speed, flowing, emissionModifiers) {
     emissionModifiers = emissionModifiers || {};
     const wasteInterval = 1.3 / Math.max(0.3, (emissionModifiers.wasteRate || 1));
-    const nutrientInterval = 1.6;
+    const nutrientInterval = 1.6 / Math.max(0.3, (emissionModifiers.nutrientRate || 1));
 
     if (flowing) {
       wasteTimer += dt * speed;

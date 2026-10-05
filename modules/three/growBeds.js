@@ -69,6 +69,7 @@ Aqua.Plants = (function () {
       root.add(buildLeg(gb.xEnd - 0.15, z));
 
       for (let i = 0; i < gb.holesPerRow; i++) {
+        if (plants.length >= gb.plantCount) break;
         const t = (i + 0.5) / gb.holesPerRow;
         const x = THREE.MathUtils.lerp(gb.xStart + 0.2, gb.xEnd - 0.2, t);
         const plant = buildPlant();

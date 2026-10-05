@@ -53,13 +53,16 @@ Aqua.Environment = (function () {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x15211f, roughness: 0.95, metalness: 0.05 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0.5, 0, 0.2);
+    const leftEdge = LAYOUT.fishTank.center.x - LAYOUT.fishTank.size.w / 2;
+    const rightEdge = LAYOUT.co2Pump.center.x + LAYOUT.co2Pump.size.w / 2;
+    const floorCenterX = (leftEdge + rightEdge) / 2;
+    floor.position.set(floorCenterX, 0, 0.2);
     floor.receiveShadow = true;
     scene.add(floor);
 
     // Rejilla tenue sobre el suelo: referencia de escala sin distraer.
     const grid = new THREE.GridHelper(Math.max(FLOOR_SIZE.width, FLOOR_SIZE.depth), 20, 0x2b423e, 0x1c2b29);
-    grid.position.set(0.5, 0.01, 0.2);
+    grid.position.set(floorCenterX, 0.01, 0.2);
     scene.add(grid);
   }
 

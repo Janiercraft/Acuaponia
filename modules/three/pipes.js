@@ -64,23 +64,47 @@ Aqua.Pipes = (function () {
       P.growBedIn,
     ], 0.05, waterPipe);
     makeCurve('throughPlants', [P.growBedIn, P.growBedOut], 0.05, waterPipe);
+    // Retorno de plantas: rodea automáticamente el PBR en vez de atravesarlo.
+    // Se calcula desde las dimensiones actuales del reactor, por lo que sigue
+    // funcionando cuando el usuario cambia ancho/profundidad o añade plantas.
+    const pbr = LAYOUT.photobioreactor;
+    const pbrLeft = pbr.center.x - pbr.width / 2;
+    const pbrRight = pbr.center.x + pbr.width / 2;
+    const bypassClearance = Math.max(0.42, LAYOUT.growBed.tubeRadius * 2.2);
+    const bypassZ = pbr.center.z - pbr.depth / 2 - bypassClearance;
+    const approachX = Math.max(P.growBedOut.x + 0.22, pbrLeft - 0.42);
+    const exitX = pbrRight + 0.48;
     makeCurve('plantsToConverge', [
       P.growBedOut,
-      { x: P.converge.x, y: P.growBedOut.y, z: P.growBedOut.z },
+      { x: approachX, y: P.growBedOut.y, z: P.growBedOut.z },
+      { x: approachX, y: P.growBedOut.y, z: bypassZ },
+      { x: exitX, y: P.growBedOut.y, z: bypassZ },
+      { x: exitX, y: P.converge.y + 0.18, z: P.converge.z },
       P.converge,
     ], 0.05, waterPipe);
 
-    // --- rama del fotobiorreactor: bifurcación -> baja -> atraviesa el PBR -> convergencia ---
+    // --- rama del fotobiorreactor: se aproxima por el lateral/frente del PBR
+    //     y sale rodeándolo, evitando que las tuberías externas lo atraviesen visualmente. ---
+    const pbrFrontZ = LAYOUT.photobioreactor.center.z - (LAYOUT.photobioreactor.depth || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrLeftX = LAYOUT.photobioreactor.center.x - (LAYOUT.photobioreactor.width || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrRightX = LAYOUT.photobioreactor.center.x + (LAYOUT.photobioreactor.width || LAYOUT.photobioreactor.radius * 2) / 2;
+    const pbrBypass = 0.28;
+    const approachFrontZ = pbrFrontZ - 0.26;
+    const leftBypassX = pbrLeftX - pbrBypass;
+    const rightBypassX = pbrRightX + pbrBypass;
     makeCurve('bifurcationToPBR', [
       P.bifurcation,
-      { x: LAYOUT.photobioreactor.center.x - 1.2, y: 0.5, z: P.bifurcation.z },
-      { x: LAYOUT.photobioreactor.center.x, y: 0.5, z: LAYOUT.photobioreactor.center.z - LAYOUT.photobioreactor.radius - 0.3 },
+      { x: leftBypassX - 0.55, y: 0.54, z: P.bifurcation.z },
+      { x: leftBypassX, y: 0.54, z: approachFrontZ },
+      { x: P.pbrIn.x, y: P.pbrIn.y - 0.18, z: approachFrontZ },
       P.pbrIn,
     ], 0.045, waterPipe);
     makeCurve('throughPBR', [P.pbrIn, P.pbrOut], 0.035, waterPipe);
     makeCurve('pbrToConverge', [
       P.pbrOut,
-      { x: LAYOUT.photobioreactor.center.x, y: 0.35, z: P.converge.z },
+      { x: P.pbrOut.x, y: Math.max(0.34, P.pbrOut.y), z: approachFrontZ },
+      { x: rightBypassX, y: 0.36, z: approachFrontZ },
+      { x: rightBypassX + 0.2, y: P.converge.y + 0.14, z: P.converge.z },
       P.converge,
     ], 0.045, waterPipe);
 

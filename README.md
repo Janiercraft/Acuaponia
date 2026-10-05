@@ -227,3 +227,12 @@ La escena 3D usa Three.js clásico cargado por CDN y después `modules/three/thr
 ## Ajustes de cámara y luz PBR
 - La cámara se reencuadra automáticamente al cargar, al volver a la pestaña Simulación y al pulsar Iniciar.
 - El fotobiorreactor incluye una luminaria LED de cultivo externa sobre el reactor y una barra interna. El botón “Luz PBR” enciende/apaga ambas y la luz real asociada.
+
+
+## Modelo paramétrico y cuantitativo
+
+La simulación permite modificar desde **⚙ Parámetros del sistema** las dimensiones del estanque, el fotobiorreactor y los tubos de cultivo, además del número/peso de peces, alimento diario, proteína del alimento, número de plantas, filas y caudal total.
+
+Los parámetros se guardan en `localStorage` bajo `aquaModelConfig`. Al pulsar **Aplicar y reconstruir maqueta** la página se recarga y la escena 3D se genera de nuevo con esas dimensiones. Con el modo adaptable activado, aumentar el número de plantas puede alargar automáticamente los tubos; los componentes posteriores (PBR, bomba de CO₂ y depósito) se desplazan para conservar la separación del sistema.
+
+El panel calcula estimaciones cuantitativas de volumen útil, biomasa de peces, alimentación, residuos, TAN-N, nitrato generado, distribución de nitrato hacia plantas/PBR, nitrato por planta, productividad vegetal y del PBR, densidad de peces y recambios del tanque. Las fórmulas son un modelo educativo simplificado y deben calibrarse con datos experimentales antes de usarse para decisiones productivas reales.

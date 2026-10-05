@@ -207,6 +207,7 @@ Aqua.Photobioreactor = (function () {
     const scene = Aqua.Three.getSystemRoot(); // meshes "físicos": entran al bounding box de frameAll()
     const group = new THREE.Group();
     group.position.set(L.center.x, 0, L.center.z);
+    group.scale.set(L.scaleX || 1, 1, L.scaleZ || 1);
 
     buildReactorBody(group);
     buildLed(group);

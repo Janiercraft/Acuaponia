@@ -16,7 +16,7 @@ Aqua.FishTank = (function () {
   const size = LAYOUT.fishTank.size;
   const center = LAYOUT.fishTank.center;
 
-  const FUNNEL_H = 0.50;
+  const FUNNEL_H = Math.min(0.50, size.h * 0.28);
   const BODY_H = size.h - FUNNEL_H;
   const FUNNEL_TOP_R = Math.min(size.w, size.d) * 0.46;
   const FUNNEL_BOTTOM_R = 0.12;

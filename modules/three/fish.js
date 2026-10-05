@@ -14,7 +14,7 @@ window.Aqua = window.Aqua || {};
 
 Aqua.Fish = (function () {
 
-  const FISH_COUNT = 3;
+  const FISH_COUNT = Math.max(1, Math.round(Number((window.AquaModelConfig || {}).fishCount) || 3));
   let fishList = []; // { group, target, speed, sluggishFactor }
   let bounds = null;
 

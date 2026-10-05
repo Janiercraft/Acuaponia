@@ -79,11 +79,106 @@
     </div>
 
     <div class="control-group">
+      <button id="btnModelPanel" class="ctrl-btn model-btn" aria-expanded="false" aria-controls="modelPanel">
+        ⚙ Parámetros del sistema
+      </button>
+    </div>
+
+    <div class="control-group">
       <button id="btnFaultPanel" class="ctrl-btn warn-btn" aria-expanded="false" aria-controls="faultPanel">
         ⚠ Simular fallas
       </button>
     </div>
   </div>
+
+  <!-- ============ PARÁMETROS CUANTITATIVOS / GEOMETRÍA ============ -->
+  <section id="modelPanel" class="model-panel hidden" aria-label="Parámetros cuantitativos de la simulación">
+    <div class="model-panel-head">
+      <div>
+        <h2>Parámetros del sistema</h2>
+        <p>Modifica geometría, población y alimentación. Al aplicar cambios estructurales la maqueta se reconstruye automáticamente.</p>
+      </div>
+      <button type="button" id="btnResetModel" class="ctrl-btn">Valores base</button>
+    </div>
+
+    <form id="modelForm" class="model-form">
+      <fieldset>
+        <legend>🐟 Estanque y peces</legend>
+        <label>Ancho del estanque (m)<input id="cfgTankWidth" type="number" min="1" max="8" step="0.1"></label>
+        <label>Alto del estanque (m)<input id="cfgTankHeight" type="number" min="0.8" max="5" step="0.1"></label>
+        <label>Largo del estanque (m)<input id="cfgTankLength" type="number" min="1" max="8" step="0.1"></label>
+        <label>Número de peces<input id="cfgFishCount" type="number" min="1" max="80" step="1"></label>
+        <label>Peso promedio por pez (kg)<input id="cfgFishWeight" type="number" min="0.01" max="8" step="0.01" inputmode="decimal"></label>
+        <label>Alimento por pez (g/día)<input id="cfgFeedPerFish" type="number" min="0" max="200" step="0.5"></label>
+        <label>Proteína del alimento (%)<input id="cfgFeedProtein" type="number" min="10" max="60" step="1"></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>🌱 Área de plantas</legend>
+        <label>Número de plantas<input id="cfgPlantCount" type="number" min="1" max="100" step="1"></label>
+        <label>Número de filas<input id="cfgPlantRows" type="number" min="1" max="6" step="1"></label>
+        <label>Largo mínimo de tubos (m)<input id="cfgGrowLength" type="number" min="1.5" max="20" step="0.1"></label>
+        <label>Ancho/diámetro del tubo (m)<input id="cfgGrowWidth" type="number" min="0.12" max="0.8" step="0.01"></label>
+        <label>Altura de los tubos (m)<input id="cfgGrowHeight" type="number" min="0.5" max="3" step="0.05"></label>
+        <label class="check-label"><input id="cfgAdaptiveLayout" type="checkbox"> Alargar automáticamente los tubos al añadir plantas</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>🧪 Fotobiorreactor</legend>
+        <label>Ancho (m)<input id="cfgPbrWidth" type="number" min="0.3" max="5" step="0.1"></label>
+        <label>Alto (m)<input id="cfgPbrHeight" type="number" min="0.5" max="6" step="0.1"></label>
+        <label>Largo/profundidad (m)<input id="cfgPbrLength" type="number" min="0.3" max="5" step="0.1"></label>
+        <label>Caudal total de recirculación (L/h)<input id="cfgFlowRate" type="number" min="50" max="20000" step="50"></label>
+      </fieldset>
+
+      <div class="model-actions">
+        <button type="submit" class="ctrl-btn primary">Aplicar y reconstruir maqueta</button>
+        <span class="model-form-note">La distribución Plantas/PBR se sigue controlando con el deslizador “Caudal”.</span>
+      </div>
+    </form>
+
+    <div class="quant-section">
+      <div class="quant-title-row">
+        <div>
+          <h3>Resultados cuantitativos estimados</h3>
+          <p>Balance diario simplificado basado en población, alimento, volumen, flujo y reparto de nutrientes.</p>
+        </div>
+        <span id="quantStatus" class="quant-status">Modelo activo</span>
+      </div>
+      <div id="quantGrid" class="quant-grid">
+        <article class="quant-card"><span>Volumen útil estanque</span><strong id="qTankVolume">—</strong></article>
+        <article class="quant-card"><span>Biomasa de peces</span><strong id="qFishBiomass">—</strong></article>
+        <article class="quant-card"><span>Alimento total</span><strong id="qFeedDay">—</strong></article>
+        <article class="quant-card"><span>Residuos sólidos</span><strong id="qSolidWaste">—</strong></article>
+        <article class="quant-card"><span>TAN-N generado</span><strong id="qTanProduced">—</strong></article>
+        <article class="quant-card"><span>NO₃⁻ producido</span><strong id="qNitrateProduced">—</strong></article>
+        <article class="quant-card"><span>NO₃⁻ → plantas</span><strong id="qNitratePlants">—</strong></article>
+        <article class="quant-card"><span>NO₃⁻ por planta</span><strong id="qNitratePerPlant">—</strong></article>
+        <article class="quant-card"><span>NO₃⁻ → PBR</span><strong id="qNitratePbr">—</strong></article>
+        <article class="quant-card"><span>Productividad plantas</span><strong id="qPlantProductivity">—</strong></article>
+        <article class="quant-card"><span>Volumen PBR</span><strong id="qPbrVolume">—</strong></article>
+        <article class="quant-card"><span>Productividad PBR</span><strong id="qPbrProductivity">—</strong></article>
+        <article class="quant-card"><span>Densidad de peces</span><strong id="qStockingDensity">—</strong></article>
+        <article class="quant-card"><span>Recambios del tanque</span><strong id="qTurnovers">—</strong></article>
+        <article class="quant-card"><span>Largo efectivo tubos</span><strong id="qEffectiveGrowLength">—</strong></article>
+        <article class="quant-card"><span>Volumen tubos</span><strong id="qGrowVolume">—</strong></article>
+      </div>
+      <details class="formula-details">
+        <summary>Ver supuestos y fórmulas del modelo</summary>
+        <div class="formula-copy">
+          <p><strong>Importante:</strong> son estimaciones de ingeniería para simulación educativa, no sustituyen mediciones de laboratorio ni un diseño zootécnico/agronómico real.</p>
+          <code>Alimento = Nº peces × g/pez/día</code>
+          <code>Sólidos ≈ Alimento × 0,28</code>
+          <code>N del alimento = Alimento × proteína × 0,16</code>
+          <code>TAN-N ≈ N del alimento × 0,35</code>
+          <code>NO₃⁻ ≈ TAN-N × eficiencia nitrificación × (62/14)</code>
+          <code>NO₃⁻ a plantas = NO₃⁻ × % caudal plantas</code>
+          <code>NO₃⁻ por planta = NO₃⁻ a plantas ÷ Nº plantas</code>
+          <p>La eficiencia de nitrificación varía con caudal, oxígeno y fallas. La productividad de plantas y PBR se escala con nutrientes disponibles, luz, caudal y volumen.</p>
+        </div>
+      </details>
+    </div>
+  </section>
 
   <!-- ============ PANEL DE FALLAS (desplegable) ============ -->
   <div id="faultPanel" class="fault-panel hidden">
@@ -196,6 +291,21 @@
   if (!window.THREE) {
     document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
   }
+</script>
+<script>
+  // Configuración paramétrica compartida por la simulación numérica y la maqueta 3D.
+  (function () {
+    const defaults = {
+      tankWidth: 2.3, tankHeight: 2.0, tankLength: 2.3,
+      fishCount: 3, fishAvgWeightKg: 0.35, feedPerFishGDay: 8, feedProteinPct: 32,
+      plantCount: 18, plantRows: 3, growLength: 4.2, growWidth: 0.44, growHeight: 1.55, adaptiveLayout: true,
+      pbrWidth: 1.0, pbrHeight: 2.0, pbrLength: 1.0, circulationFlowLh: 900
+    };
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem('aquaModelConfig') || '{}') || {}; } catch (_) {}
+    window.AQUA_MODEL_DEFAULTS = defaults;
+    window.AquaModelConfig = Object.assign({}, defaults, stored);
+  })();
 </script>
 <script src="modules/three/three-classic-bundle.js"></script>
 <script src="modules/monitoring.js"></script>
